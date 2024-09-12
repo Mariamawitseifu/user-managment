@@ -51,6 +51,99 @@ const addPermission = async (req, res) => {
     }
 };
 
+
+const getPermissions =async(req,res) => {
+    try{
+        const permissions = await Permission.find({});
+ 
+        return res.status(200).json({
+            success: true,
+            msg: 'Permissions Fetched Successfully!',
+            data: permissions
+        });
+
+    }
+    catch(error){
+        return res.status(400).json({
+            success: false,
+            msg: error.message
+        })
+    }
+}
+
+const deletePermission = async (req,res) => {
+    try{
+        const errors = validationResult(req);
+
+        if(!errors.isEmpty()){
+            return res.status(200).json({
+                success: false,
+                msg: 'Errors',
+                errors: errors.array()
+            });
+        }
+
+        const { id } = req.body;
+
+        await Permission.findByIdAndDelete({_id: id});
+
+        return res.status(200).json({
+            success: false,
+            msg: 'Permission Deleted Successully!',
+        });
+
+    }
+    catch(error){
+        return res.status(400).json({
+
+        })
+
+    }
+}
+
+const updatePermission = async (req, res) => {
+    try{
+
+        const errors = validationResult(req);
+
+        if(!errors.isEmpty()){
+            return res.status(200).json({
+                success: false,
+                msg: 'Errors',
+                errors:errors.array()
+            });
+        }
+
+        const { id, permission_name } = req.body;
+
+        const isExists = await Permission.findOne({ _id: id});
+
+        if(!isExists){
+            return res.status(400).json({
+                success: false,
+                msg: 'Permission ID already exists!'
+            })
+        }
+
+        if(isExists){
+            return res.status(400).json({
+                success: false,
+                msg: 'Permission ID already exists!'
+            })
+        }
+
+        var obj = {
+            permission_name
+        }
+
+    }
+    
+}
+
+
 module.exports = {
-    addPermission
+    addPermission,
+    getPermissions,
+    deletePermission,
+    updatePermission,
 };
