@@ -12,3 +12,25 @@ exports.permissionUpdateValidator = [
     check('permission_name', 'Permission Name is required').not().isEmpty(),
 ];
 
+exports.storeRoleValidator = [
+    check('role_name', 'Permission Name is required').not().isEmpty(),
+    check('value', 'value is required').not().isEmpty(),
+];
+
+
+exports.scheduleAddValidator = [
+    check('user_id', 'user is required').not().isEmpty(),
+    check('branch_id', 'branch is required').not().isEmpty(),
+]
+
+exports.scheduleDeleteValidator = [
+    check('id', 'id is required').not().isEmpty(),
+]
+exports.scheduleUpdateValidator = [
+    check('id', 'id is required').not().isEmpty(),
+]
+
+exports.branchAddValidator = [
+    check('name', 'name is required').not().isEmpty(),
+]
+

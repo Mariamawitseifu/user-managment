@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema({
     },
     role:{
         type:Number,
-        default:0
+        default:0 //0 could be for regular users,1 for doctors, etc..
     },
 
 });

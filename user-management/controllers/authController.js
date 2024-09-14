@@ -2,6 +2,8 @@ const User = require('../models/userModel');
 const { validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const Permission = require('../models/permissionModel');
+const UserPermission = require('../models/userPermissionModel');
 
 const registerUser = async (req, res) => {
     try {
@@ -15,7 +17,7 @@ const registerUser = async (req, res) => {
             });
         }
 
-        const { name, email, password } = req.body;
+        const { name, email, password, role } = req.body;
 
         const isExistUser = await User.findOne({ email });
 
@@ -31,18 +33,45 @@ const registerUser = async (req, res) => {
         const user = new User({
             name,
             email,
-            password: hashedPassword
+            password: hashedPassword,
+            role
         });
 
         const userData = await user.save();
 
+        Permission.find({
+            is_default:1
+        });
+
+        const defaultPermissions = await Permission.find({
+            is_default: 1
+        });
+
+        if(defaultPermissions.length > 0){
+            const permissionArray = [];
+            defaultPermissions.forEach(permission => {
+                permissionArray.push({
+                    permission_name:permission.permission_name,
+                    permission_value:[0,1,2,3]
+
+                });
+            })
+
+            const userPermission = new UserPermission({
+                user_id:userData._id,
+                permissions:permissionArray
+            });
+
+            await userPermission.save();
+        }
+       
         return res.status(201).json({
             success: true,
             msg: 'Registered successfully',
             data: userData
         });
     } catch (error) {
-        console.error(error); // Log error for debugging
+        console.error(error);
         return res.status(500).json({
             success: false,
             msg: error.message
@@ -87,6 +116,74 @@ const loginUser = async(req,res) => {
        }
 
        const accessToken = await generateAccessToken({user:userData});
+
+       //get user data with all permissions
+
+       const result = await User.aggregate([
+            {
+                $match:{ email:userData.email }
+            },
+            {
+                $lookup:{
+                    from: "userpermissions",
+                    localField: "_id",
+                    foreignField: "user_id",
+                    as: "permissions"
+                }
+            },
+            {
+                $project:{
+                    _id:0,
+                    name:1,
+                    email:1,
+                    role:1,
+                    permissions:{
+                        $cond:{
+                            if: {$isArray: "$permissions"},
+                            then: { $arrayElemAt: ["$permissions",0]},
+                            else: null
+                        }
+                    }
+                }
+            },
+            {
+                $addFields:{
+                    "permissions":{
+                        "permissions": "$permissions.permissions"
+                    }
+                }
+            }
+       ]);
+
+    // const result = await User.aggregate([
+    //     {
+    //         $match: { _id: userData._id }
+    //     },
+    //     {
+    //         $lookup: {
+    //             from: "userpermissions",
+    //             localField: "_id",
+    //             foreignField: "user_id",
+    //             as: "permissions"
+    //         }
+    //     },
+    //     {
+    //         $unwind: {
+    //             path: "$permissions",
+    //             preserveNullAndEmptyArrays: true 
+    //         }
+    //     },
+    //     {
+    //         $project: {
+    //             _id: 1,
+    //             name: 1,
+    //             email: 1,
+    //             role: 1,
+    //             permissions: "$permissions.permissions"
+    //         }
+    //     }
+    // ]);
+
 
        return res.status(200).json({
         success:true,

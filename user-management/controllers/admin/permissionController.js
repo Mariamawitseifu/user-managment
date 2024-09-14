@@ -17,7 +17,11 @@ const addPermission = async (req, res) => {
         const { permission_name } = req.body;
 
         // Check if the permission already exists
-        const isExists = await Permission.findOne({ permission_name });
+        const isExists = await Permission.findOne({
+            permission_name:{
+                $regex: permission_name,
+                $options: 'i'
+            } });
         if (isExists) {
             return res.status(400).json({
                 success: false,
@@ -34,7 +38,7 @@ const addPermission = async (req, res) => {
         }
         // Create and save new permission
         const permission = new Permission(obj);
-        const newPermission = await newPermission.save();
+        const savedPermission = await permission.save();
 
         // Respond with success
         return res.status(201).json({
@@ -102,43 +106,68 @@ const deletePermission = async (req,res) => {
 }
 
 const updatePermission = async (req, res) => {
-    try{
-
+    try {
         const errors = validationResult(req);
 
-        if(!errors.isEmpty()){
-            return res.status(200).json({
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
                 success: false,
-                msg: 'Errors',
-                errors:errors.array()
+                msg: 'Validation errors',
+                errors: errors.array()
             });
         }
 
         const { id, permission_name } = req.body;
 
-        const isExists = await Permission.findOne({ _id: id});
+        // Check if the permission ID exists
+        const isExists = await Permission.findOne({ _id: id });
 
-        if(!isExists){
-            return res.status(400).json({
+        if (!isExists) {
+            return res.status(404).json({
                 success: false,
-                msg: 'Permission ID already exists!'
-            })
+                msg: 'Permission ID does not exist!'
+            });
         }
 
-        if(isExists){
-            return res.status(400).json({
-                success: false,
-                msg: 'Permission ID already exists!'
-            })
-        }
-
-        var obj = {
+        // Check if the permission name is already assigned to a different ID
+        const isNameAssigned = await Permission.findOne({
+            _id: { $ne: id },
             permission_name
+        });
+
+        if (isNameAssigned) {
+            return res.status(400).json({
+                success: false,
+                msg: 'Permission name is already assigned to another permission!'
+            });
         }
 
+        // Prepare the update object
+        const updateFields = { permission_name };
+
+        if (req.body.default != null) { //1 ya 0, true false
+            updateFields.is_default = parseInt(req.body.default);
+        }
+
+        // Perform the update
+        const updatedPermission = await Permission.findByIdAndUpdate(id, {
+            $set: updateFields
+        }, { new: true });
+
+        return res.status(200).json({
+            success: true,
+            msg: 'Permission updated successfully',
+            data: updatedPermission
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            msg: 'Permission ID is not found!'
+        });
     }
-    
 }
+
 
 
 module.exports = {
