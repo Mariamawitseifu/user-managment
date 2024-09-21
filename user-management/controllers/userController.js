@@ -19,7 +19,7 @@ const createUser = async (req, res) => {
             });
         }
 
-        const { name, email, role } = req.body;
+        const { name, email, role, permissions } = req.body;
 
         // Check if the email already exists
         const isExists = await User.findOne({ email });
@@ -53,35 +53,40 @@ const createUser = async (req, res) => {
         // Save the user to the database
         const userData = await user.save();
         
-        //add permission to user if coming in request
-        // if(req.body.permissions ! = undefined && req.body.permissions.length > 0){
+        // Initialize permissions array
+        const permissionArray = [];
 
-        //     const addPermission = req.body.permissions;
+        if (permissions && permissions.length > 0) {
+            try {
+                // Fetch and add permissions
+                await Promise.all(permissions.map(async (permission) => {
+                    const permissionData = await Permission.findOne({ _id: permission.id });
+                    if (permissionData) {
+                        permissionArray.push({
+                            permission_name: permissionData.permission_name,
+                            permission_value: permission.value,
+                        });
+                    } else {
+                        console.warn(`Permission with ID ${permission.id} not found`);
+                    }
+                }));
 
-        //     const permissionArray = [];
-            
-            
-                
-        //         await Promise.all(addPermission.map(async(permission)=>{
-                
-        //         const permissionData = await Permission.findOne({ _id: permission.id});
+                if (permissionArray.length > 0) {
+                    const userPermission = new UserPermission({
+                        user_id: userData._id,
+                        permissions: permissionArray
+                    });
 
-        //         permissionArray.push({
-        //             permission_name: permissionData.permission_name,
-        //             permission_value: permission.value,
-        //         });
-        //     }));
-
-        //     const userPermission = new UserPermission({
-        //         user_id: userData._id,
-        //         permissions:permissionArray
-        //     })
-
-        //     await userPermission.save();
-        //     console.log('wor')
-        // }
+                    await userPermission.save();
+                    console.log('User permissions assigned');
+                }
+            } catch (err) {
+                console.error('Error handling permissions:', err);
+            }
+        }
         
-        console.log(password);
+        console.log('Generated Password:', password);
+        
         // Prepare the email content
         const content = `
             <p>Hi <b>${userData.name}</b>,</p>
@@ -110,10 +115,14 @@ const createUser = async (req, res) => {
         return res.status(201).json({
             success: true,
             msg: 'User created successfully!',
-            data: userData
+            data: {
+                user: userData,
+                permissions: permissionArray
+            }
         });
     } catch (error) {
         // Handle errors
+        console.error('Error creating user:', error);
         return res.status(500).json({
             success: false,
             msg: error.message
@@ -121,64 +130,135 @@ const createUser = async (req, res) => {
     }
 };
 
-const getUser = async (req,res) => {
+
+// const getUser = async (req, res) => {
+//     try {
+//         const users = await User.aggregate([
+//             {
+//                 $match: { 
+//                     _id: { $ne: new mongoose.Types.ObjectId(req.user._id) }
+//                 }
+//             },
+//             {
+//                 $lookup: {
+//                     from: "userpermissions",
+//                     localField: "_id",
+//                     foreignField: "user_id",
+//                     as: "permissions"
+//                 }
+//             },
+//             {
+//                 $project: {
+//                     _id: 0,
+//                     name: 1,
+//                     email: 1,
+//                     role: 1,
+//                     permissions: {
+//                         $cond: {
+//                             if: { $isArray: "$permissions" },
+//                             then: { $arrayElemAt: ["$permissions", 0] },
+//                             else: null
+//                         }
+//                     }
+//                 }
+//             },
+//             {
+//                 $addFields: {
+//                     permissions: {
+//                         permissions: "$permissions.permissions"
+//                     }
+//                 }
+//             }
+//         ]);
+
+//         return res.status(200).json({
+//             success: true,
+//             msg: 'Users fetched successfully!',
+//             data: users
+//         });
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({
+//             success: false,
+//             msg: 'Internal server error',
+//             data: null
+//         });
+//     }
+// };
+
+
+const getUser = async (req, res) => {
     try {
+        // Extract the current user ID from the token
+        const currentUserId = req.user._id;
 
-    //     const result = await User.aggregate([
-    //         {
-    //             $match:{ 
-    //                 _id:{
-    //                     $ne: new mongoose.Types.ObjectId(req.user._id)
-    //                 }
-    //              }
-    //         },
-    //         {
-    //             $lookup:{
-    //                 from: "userpermissions",
-    //                 localField: "_id",
-    //                 foreignField: "user_id",
-    //                 as: "permissions"
-    //             }
-    //         },
-    //         {
-    //             $project:{
-    //                 _id:0,
-    //                 name:1,
-    //                 email:1,
-    //                 role:1,
-    //                 permissions:{
-    //                     $cond:{
-    //                         if: {$isArray: "$permissions"},
-    //                         then: { $arrayElemAt: ["$permissions",0]},
-    //                         else: null
-    //                     }
-    //                 }
-    //             }
-    //         },
-    //         {
-    //             $addFields:{
-    //                 "permissions":{
-    //                     "permissions": "$permissions.permissions"
-    //                 }
-    //             }
-    //         }
-    //    ]);
+        // Check if the currentUserId is valid
+        if (!mongoose.Types.ObjectId.isValid(currentUserId)) {
+            return res.status(400).json({
+                success: false,
+                msg: 'Invalid user ID',
+                data: null
+            });
+        }
 
-        const users = await User.find({
-            _id: {
-                $ne: req.user._id
+        // Perform aggregation to fetch users excluding the current user
+        const users = await User.aggregate([
+            {
+                $match: { 
+                    _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+                }
+            },
+            {
+                $lookup: {
+                    from: "userpermissions",
+                    localField: "_id",
+                    foreignField: "user_id",
+                    as: "permissions"
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    name: 1,
+                    email: 1,
+                    role: 1,
+                    permissions: {
+                        $cond: {
+                            if: { $isArray: "$permissions" },
+                            then: { $arrayElemAt: ["$permissions", 0] },
+                            else: null
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    permissions: {
+                        permissions: "$permissions.permissions"
+                    }
+                }
             }
-        });
-        return res.status(201).json({
+        ]);
+
+        // Debugging: Log the number of users fetched and currentUserId
+        console.log(`Fetched ${users.length} users excluding ID ${currentUserId}`);
+
+        return res.status(200).json({
             success: true,
-            msg: 'Users Fetched successfully!',
+            msg: 'Users fetched successfully!',
             data: users
         });
     } catch (error) {
-        
+        console.error('Error fetching users:', error);
+        return res.status(500).json({
+            success: false,
+            msg: 'Internal server error',
+            data: null
+        });
     }
+};
 
-}
+
 
 const updateUser = async (req,res) => {
     try {
@@ -215,10 +295,16 @@ const updateUser = async (req,res) => {
             $set:updateObj
         }, { new: true });
 
+        await UserPermission.findOneAndUpdate(
+            {user_id: updatedData._id},
+            {permissions: permissionArray},
+            {upsert:true, new:true, setDefaultsOnInsert: true}
+        );
+
         return res.status(200).json({
             success: true,
-            msg: 'Users Fetched successfully',
-            data: users
+            msg: 'Users Updated successfully',
+            data: updatedData
         });
     } catch (error) {
         return res.status(400).json({
@@ -262,9 +348,19 @@ const deleteUser = async (req,res) => {
     });
 
 }
+
+
 module.exports = {
     createUser,
     getUser,
     updateUser,
     deleteUser,
 };
+
+
+
+
+
+
+
+

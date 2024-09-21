@@ -6,10 +6,12 @@ const userPermissionSchema = new mongoose.Schema({
         required:true,
         ref: 'User'
     },
-    permission:{
-        permission_name:String,
-        permission_value: [Number]
-    },
+    permissions: [{
+        permission_name: { type: String, required: true },
+        permission_value: { type: [Number], required: true }
+    }]
 });
 
 module.exports = mongoose.model('UserPermission',userPermissionSchema);
+
+

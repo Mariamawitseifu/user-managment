@@ -2,6 +2,7 @@ const express = require('express');
 const router = express();
 
 const auth = require('../middlewares/authMiddleware');
+const checkPermission = require('../middlewares/checkPermission');
 
 const { scheduleAddValidator,scheduleDeleteValidator,scheduleUpdateValidator, branchAddValidator} = require('../helpers/adminValidator');
 const { createUserValidator, updateUserValidator, deleteUserValidator } = require('../helpers/validator')

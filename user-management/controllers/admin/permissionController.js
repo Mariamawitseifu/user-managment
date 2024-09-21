@@ -3,12 +3,15 @@ const Permission = require('../../models/permissionModel');
 
 const addPermission = async (req, res) => {
     try {
+        console.log('Request body:', req.body);
+
         // Validate request
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({
+            console.log('Validation errors:', errors.array());
+            return res.status(200).json({
                 success: false,
-                msg: 'Validation errors',
+                msg: 'Errors',
                 errors: errors.array()
             });
         }
@@ -18,10 +21,13 @@ const addPermission = async (req, res) => {
 
         // Check if the permission already exists
         const isExists = await Permission.findOne({
-            permission_name:{
+            permission_name: {
                 $regex: permission_name,
                 $options: 'i'
-            } });
+            }
+        });
+        console.log('Permission exists:', isExists);
+
         if (isExists) {
             return res.status(400).json({
                 success: false,
@@ -33,12 +39,13 @@ const addPermission = async (req, res) => {
             permission_name
         }
 
-        if(req.body.default){
+        if (req.body.default) {
             obj.is_default = parseInt(req.body.default);
         }
         // Create and save new permission
         const permission = new Permission(obj);
         const savedPermission = await permission.save();
+        console.log('Saved permission:', savedPermission);
 
         // Respond with success
         return res.status(201).json({
@@ -47,6 +54,7 @@ const addPermission = async (req, res) => {
         });
 
     } catch (error) {
+        console.error('Error occurred:', error);
         // Handle unexpected errors
         return res.status(500).json({
             success: false,
@@ -54,6 +62,7 @@ const addPermission = async (req, res) => {
         });
     }
 };
+
 
 
 const getPermissions =async(req,res) => {

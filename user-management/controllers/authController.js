@@ -4,6 +4,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const Permission = require('../models/permissionModel');
 const UserPermission = require('../models/userPermissionModel');
+const helper = require('../helpers/helper')
+
 
 const registerUser = async (req, res) => {
     try {
@@ -39,9 +41,9 @@ const registerUser = async (req, res) => {
 
         const userData = await user.save();
 
-        Permission.find({
-            is_default:1
-        });
+        // Permission.find({
+        //     is_default:1
+        // });
 
         const defaultPermissions = await Permission.find({
             is_default: 1
@@ -117,81 +119,53 @@ const loginUser = async(req,res) => {
 
        const accessToken = await generateAccessToken({user:userData});
 
-       //get user data with all permissions
-
-       const result = await User.aggregate([
-            {
-                $match:{ email:userData.email }
-            },
-            {
-                $lookup:{
-                    from: "userpermissions",
-                    localField: "_id",
-                    foreignField: "user_id",
-                    as: "permissions"
-                }
-            },
-            {
-                $project:{
-                    _id:0,
-                    name:1,
-                    email:1,
-                    role:1,
-                    permissions:{
-                        $cond:{
-                            if: {$isArray: "$permissions"},
-                            then: { $arrayElemAt: ["$permissions",0]},
-                            else: null
-                        }
-                    }
-                }
-            },
-            {
-                $addFields:{
-                    "permissions":{
-                        "permissions": "$permissions.permissions"
-                    }
-                }
+    const result = await User.aggregate([
+        {
+            $match: { email: userData.email }
+        },
+        {
+            $lookup: {
+                from: "userpermissions", 
+                localField: "_id",    
+                foreignField: "user_id", 
+                as: "permissions"        
             }
-       ]);
+        },
+        {
+            $unwind: { 
+                path: "$permissions",     
+                preserveNullAndEmptyArrays: true 
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                name: 1,
+                email: 1,
+                role: 1,
+                permissions: "$permissions.permissions" 
+            }
+        }
+    ]);
+    
+    // Check the result
+    console.log('Aggregation Result:', result);
 
-    // const result = await User.aggregate([
-    //     {
-    //         $match: { _id: userData._id }
-    //     },
-    //     {
-    //         $lookup: {
-    //             from: "userpermissions",
-    //             localField: "_id",
-    //             foreignField: "user_id",
-    //             as: "permissions"
-    //         }
-    //     },
-    //     {
-    //         $unwind: {
-    //             path: "$permissions",
-    //             preserveNullAndEmptyArrays: true 
-    //         }
-    //     },
-    //     {
-    //         $project: {
-    //             _id: 1,
-    //             name: 1,
-    //             email: 1,
-    //             role: 1,
-    //             permissions: "$permissions.permissions"
-    //         }
-    //     }
-    // ]);
-
-
-       return res.status(200).json({
-        success:true,
-        msg: 'Login Successfully',
-        accessToken: accessToken,
-        tokenType:'Bearer',
-        data:userData
-       });
+        // Send response with permissions
+        if (result.length > 0) {
+        return res.status(200).json({
+            success: true,
+            msg: 'Login Successfully',
+            accessToken,
+            tokenType: 'Bearer',
+            data: result[0] 
+        });
+    } else {
+        return res.status(400).json({
+            success: false,
+            msg: 'No permissions found'
+        });
+    }
 
     } catch (error) {
         console.error(error);
@@ -228,8 +202,30 @@ const getProfile = async(req,res) => {
     }
 }
 
+const getUserPermissions = async (req, res) => {
+    try{
+        const user_id = req.user._id;
+
+        const userPermissions = await helper.getUserPermissions(user_id);
+        console.log(helper)
+        return res.status(200).json({
+            success: true,
+            msg: 'User Permissions',
+            data:userPermissions
+        })
+    }
+    catch(error){
+        return res.status(400).json({
+            success: false,
+            msg: error.message
+        });
+    }
+
+}
+
 module.exports = {
     registerUser,
     loginUser,
     getProfile,
+    getUserPermissions,
 };
