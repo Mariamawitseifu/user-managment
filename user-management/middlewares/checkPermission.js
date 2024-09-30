@@ -1,39 +1,38 @@
-const checkPermission = async (req,res, next) => {
+const checkPermission = async (req, res, next) => {
     try {
+        if (req.user.role !== 1) {
+            const routerPermission = await helper.getRouterPermission(req.user.role, req.path);
+            const userPermissions = await helper.getUserPermissions(req.user._id);
 
-        if(req.user.role !=1){
-            const routerPermission = await helper.getRouterPermission(req.path, req.user.role);
-            const userPermission = await helper.getRouterPermission(req.user._id);
-
-            if(userPermissions.permissions.permissions == undefined || !routerPermission){
+            if (!userPermissions.permissions || !routerPermission) {
                 return res.status(400).json({
                     success: false,
-                    msg: "You haven't permission to access this route!"
+                    msg: "You don't have permission to access this route!"
                 });
             }
-            const permission_name = routerPermission.permission_id.permission_name;
-            const permission_values = routerPermission.permission;
+
+            const permissionName = routerPermission.permission_id.permission_name;
+            const permissionValues = routerPermission.permission;
 
             const hasPermission = userPermissions.permissions.permissions.some(permission =>
-                permission.permission_name == permission_name &&
-                permission.permission_value.some(value => permission_values.includes(value))
+                permission.permission_name === permissionName &&
+                permission.permission_value.some(value => permissionValues.includes(value))
             );
-            if(!hasPermission){
-                return res.status(400).json({
+
+            if (!hasPermission) {
+                return res.status(403).json({
                     success: false,
-                    msg: "You haven't permission to access this route!"
+                    msg: "You don't have permission to access this route!"
                 });
             }
         }
-        return next();
-
-        console.log(req.user);
+        next();
     } catch (error) {
-        return res.status(400).json({
+        return res.status(500).json({
             success: false,
             msg: 'Something went wrong'
         });
     }
-}
+};
 
-module.exports = checkPermission;
+module.exports = { checkPermission }

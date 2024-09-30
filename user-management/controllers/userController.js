@@ -130,63 +130,6 @@ const createUser = async (req, res) => {
     }
 };
 
-
-// const getUser = async (req, res) => {
-//     try {
-//         const users = await User.aggregate([
-//             {
-//                 $match: { 
-//                     _id: { $ne: new mongoose.Types.ObjectId(req.user._id) }
-//                 }
-//             },
-//             {
-//                 $lookup: {
-//                     from: "userpermissions",
-//                     localField: "_id",
-//                     foreignField: "user_id",
-//                     as: "permissions"
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     name: 1,
-//                     email: 1,
-//                     role: 1,
-//                     permissions: {
-//                         $cond: {
-//                             if: { $isArray: "$permissions" },
-//                             then: { $arrayElemAt: ["$permissions", 0] },
-//                             else: null
-//                         }
-//                     }
-//                 }
-//             },
-//             {
-//                 $addFields: {
-//                     permissions: {
-//                         permissions: "$permissions.permissions"
-//                     }
-//                 }
-//             }
-//         ]);
-
-//         return res.status(200).json({
-//             success: true,
-//             msg: 'Users fetched successfully!',
-//             data: users
-//         });
-//     } catch (error) {
-//         console.error(error);
-//         return res.status(500).json({
-//             success: false,
-//             msg: 'Internal server error',
-//             data: null
-//         });
-//     }
-// };
-
-
 const getUser = async (req, res) => {
     try {
         // Extract the current user ID from the token
@@ -257,8 +200,6 @@ const getUser = async (req, res) => {
         });
     }
 };
-
-
 
 const updateUser = async (req,res) => {
     try {
