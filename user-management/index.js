@@ -4,17 +4,24 @@ const logger = require('./logger');
 
 // Connect to MongoDB
 mongoose.connect("mongodb://mongo:27017/users-role-perm", {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
+    // useNewUrlParser: true,
+    // useUnifiedTopology: true
 })
-.then(() => console.log('MongoDB connected'))
-.catch(err => console.log('MongoDB connection error:', err));
-
+.then(() => {
+    logger.info('Database connected successfully');
+  })
+  .catch(err => {
+    logger.error(`Database connection failed: ${err.message}`);
+  });
 const express = require('express');
 const app = express();
 const router = express.Router();
 app.use(express.static('public'));
 
+app.use((req, res, next) => {
+    logger.info(`Incoming request: ${req.method} ${req.url}`);
+    next();
+});
 //auth route
 const authRoute = require('./routes/authRoute')
 app.use(express.json()); 
@@ -40,9 +47,9 @@ logger.error('An error occurred', { error: new Error('Sample error') });
 
 const port = process.env.SERVER_PORT | 3000;
 
-console.log({port})
+logger.info(`Server will run on port: ${port}`);
 
 app.listen(port, () => {
-    console.log("Server is running on Port:- "+port);
+    logger.info(`Server will run on port: ${port}`);
 })
 
