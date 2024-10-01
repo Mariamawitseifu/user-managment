@@ -1,6 +1,6 @@
 const Contact = require('../models/contactModel')
 const { validationResult } = require('express-validator');
-const { param } = require('../routes/commonRoute');
+// const { param } = require('../routes/commonRoute');
 
 const registerContact = async (req,res) => {
     try {
@@ -129,6 +129,8 @@ module.exports = {
     deleteContact,
 
 }
+
+
 
 
 

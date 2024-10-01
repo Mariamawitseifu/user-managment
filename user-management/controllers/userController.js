@@ -1,6 +1,6 @@
 const { validationResult } = require('express-validator');
 const User = require('../models/userModel');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const randomstring = require('randomstring');
 const {sendMail} = require('../helpers/mailer');
 const mongoose = require('mongoose');
