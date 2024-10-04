@@ -62,17 +62,33 @@ const registerAccount = async (req,res) => {
     }
 };
 
-const getAccounts = async (req,res) => {
-
-    const { page = 1, limit = 10 } = req.query;
-
+const getAccounts = async (req, res) => {
     try {
-        const accounts = await Account.find();
-        res.status(200).json(accounts);
+        // Get page and limit from query parameters
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+
+        // Calculate the starting index for the query
+        const startIndex = (page - 1) * limit;
+
+        // Fetch the accounts with pagination
+        const accounts = await Account.find()
+            .limit(limit)
+            .skip(startIndex);
+
+        const totalAccounts = await Account.countDocuments();
+
+        res.status(200).json({
+            totalAccounts,
+            totalPages: Math.ceil(totalAccounts / limit),
+            currentPage: page,
+            accounts
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
+
 
 const getAccount = async (req,res) => {
     const { id } =req.params;

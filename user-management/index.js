@@ -1,55 +1,52 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
-const logger = require('./logger');
-
-// Connect to MongoDB
-mongoose.connect("mongodb://mongo:27017/users-role-perm", {
-    // useNewUrlParser: true,
-    // useUnifiedTopology: true
-})
-.then(() => {
-    logger.info('Database connected successfully');
-  })
-  .catch(err => {
-    logger.error(`Database connection failed: ${err.message}`);
-  });
 const express = require('express');
+const logger = require('./logger');
+const { mongoConnect } = require('./database/mongodb'); 
+
 const app = express();
 const router = express.Router();
+
+// Connect to MongoDB
+mongoConnect();
+
+// Middleware
 app.use(express.static('public'));
+app.use(express.json());
 
 app.use((req, res, next) => {
     logger.info(`Incoming request: ${req.method} ${req.url}`);
     next();
 });
-//auth route
-const authRoute = require('./routes/authRoute')
-app.use(express.json()); 
+
+// Routes
+const authRoute = require('./routes/authRoute');
+const commonRoute = require('./routes/commonRoute');
+
+// Auth route
 app.use('/api', authRoute);
 
-//admin route
+// Admin route
 app.use('/api/admin', require('./routes/adminRoute'));
 
-//common route
-const commonRoute = require('./routes/commonRoute')
+// Common route
 app.use('/api', commonRoute);
 
+// Auth and Admin Middlewares
 const auth = require('./middlewares/authMiddleware');
 const { onlyAdminAccess } = require('./middlewares/adminMiddleware');
 const routerController = require('./controllers/admin/routerController');
 const { addRouterPermissionValidator } = require('./helpers/adminValidator');
+const seedDatabase = require('./seeds/seed');
 
-router.get('/get-routes',auth, onlyAdminAccess,addRouterPermissionValidator, routerController.getAllRoutes)
+// Router for getting routes
+router.get('/get-routes', auth, onlyAdminAccess, addRouterPermissionValidator, routerController.getAllRoutes);
 
+// Server Port
+const port = process.env.SERVER_PORT || 3000;
 
-logger.info('Application has started');
-logger.error('An error occurred', { error: new Error('Sample error') });
-
-const port = process.env.SERVER_PORT | 3000;
+// Start the server
+app.listen(port, () => {
+    logger.info(`Server running on http://localhost:${port}`);
+});
 
 logger.info(`Server will run on port: ${port}`);
-
-app.listen(port, () => {
-    logger.info(`Server will run on port: ${port}`);
-})
-
