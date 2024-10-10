@@ -1,6 +1,7 @@
 const Contact = require('../models/contactModel')
 const { validationResult } = require('express-validator');
 // const { param } = require('../routes/commonRoute');
+const Paginate = require('../services/paginate')
 
 const registerContact = async (req,res) => {
     try {
@@ -71,11 +72,23 @@ const getContact =async (req,res) => {
 
 const getContacts = async (req,res) => {
     
-    const { page = 1, limit = 10 } = req.query;
-
     try {
-        const contacts = await Contact.find();
-        res.status(200).json(contacts);
+        //Get limit and offset
+        const limit = Paginate.getLimit(req);
+        const offset = Paginate.getOffset(req);
+
+        //Fetch the contacts with pagination
+        const contacts = await Contact.find()
+            .limit(limit)
+            .skip(offset);
+
+        //Get the total count of contacts
+        const count = await Contact.countDocuments();
+
+        const paginatedResponse = Paginate.getPaginated({ count, rows:contacts}, res);
+
+        // res.status(200).json(contacts);
+        res.status(200).json(paginatedResponse);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -127,8 +140,11 @@ module.exports = {
     getContacts,
     updateContact,
     deleteContact,
-
 }
+
+
+
+
 
 
 

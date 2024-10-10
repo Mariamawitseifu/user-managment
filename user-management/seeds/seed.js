@@ -15,14 +15,26 @@ const usersData = [
     {
         name: 'John Doe',
         email: 'john@example.com',
-        password: 'hashedpassword1', // Hash this with bcrypt
         role: '1', 
+        password: '123456',
     },
     {
         name: 'Jane Smith',
         email: 'jane@example.com',
-        password: 'hashedpassword2', // Hash this with bcrypt
         role: '3',
+        password: '123456',
+    },
+    {
+        name: 'Doe',
+        email: 'doe@example.com',
+        role: '1', 
+        password: '123456',
+    },
+    {
+        name: 'Smith',
+        email: 'smith@example.com',
+        role: '3',
+        password: '123456',
     },
 ];
 
@@ -70,16 +82,22 @@ const seedDatabase = async () => {
         // Insert roles
         const createdRoles = await Role.insertMany(rolesData);
 
-        // Map roles to user data
-        usersData.forEach(user => {
-            const role = createdRoles.find(r => r.name === user.role);
+        // Map roles to user data and hash passwords
+        const usersWithHashedPasswords = await Promise.all(usersData.map(async (user) => {
+            const role = createdRoles.find(r => r.value === user.role);
             if (role) {
                 user.role = role._id; // Set the user role to the role ID
             }
-        });
+
+            const password = randomstring.generate(6);
+            user.password = await bcrypt.hash(password, 10); // Hash the password
+
+            console.log(`Generated Password for ${user.name}: ${password}`); // Log the plain password
+            return user; // Return the updated user object
+        }));
 
         // Insert users
-        const createdUsers = await User.insertMany(usersData);
+        const createdUsers = await User.insertMany(usersWithHashedPasswords);
 
         // Insert permissions
         const createdPermissions = await Permission.insertMany(permissionsData);
@@ -98,6 +116,7 @@ const seedDatabase = async () => {
         mongoose.connection.close();
     }
 };
+
 
 seedDatabase();
 

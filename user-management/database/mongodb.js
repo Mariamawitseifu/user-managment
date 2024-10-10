@@ -3,6 +3,8 @@ const logger = require('../logger');
 
 const mongoUrl = process.env.MONGO_URL;
 
+// const mongoUrl = process.env.MONGODB_URI || "mongodb://mongo:27017/users-role-perm";
+
 exports.mongoConnect = () => {
     return mongoose.connect(mongoUrl || "mongodb://mongo:27017/users-role-perm", {
     })
@@ -14,3 +16,4 @@ exports.mongoConnect = () => {
         process.exit(1);
     });
 };
+

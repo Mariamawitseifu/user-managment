@@ -130,8 +130,13 @@ const createUser = async (req, res) => {
     }
 };
 
-const getUser = async (req, res) => {
+const getUsers = async (req, res) => {
     try {
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+
+        const startIndex = (page - 1) * limit;
         // Extract the current user ID from the token
         const currentUserId = req.user._id;
 
@@ -181,15 +186,25 @@ const getUser = async (req, res) => {
                     }
                 }
             }
+            // .limit(limit)
+            // .skip(startIndex)
         ]);
 
         // Debugging: Log the number of users fetched and currentUserId
         console.log(`Fetched ${users.length} users excluding ID ${currentUserId}`);
 
+        // const users = await User.find()
+        //     .limit(limit)
+        //     .skip(startIndex);
+
+        const totalUsers = await User.countDocuments();
+
+
         return res.status(200).json({
-            success: true,
-            msg: 'Users fetched successfully!',
-            data: users
+            totalUsers,
+            totalPages: Math.ceil(totalUsers / limit),
+            currentPage: page,
+            users
         });
     } catch (error) {
         console.error('Error fetching users:', error);
@@ -293,7 +308,7 @@ const deleteUser = async (req,res) => {
 
 module.exports = {
     createUser,
-    getUser,
+    getUsers,
     updateUser,
     deleteUser,
 };

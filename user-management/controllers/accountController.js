@@ -89,7 +89,6 @@ const getAccounts = async (req, res) => {
     }
 };
 
-
 const getAccount = async (req,res) => {
     const { id } =req.params;
     try {
