@@ -6,7 +6,7 @@ const Role = require('../models/roleModel');
 const UserPermission = require('../models/userPermissionModel');
 
 const rolesData = [
-    { value: '1', role_name: 'Administrator' },
+    { value: '1', role_name: 'Admin' },
     { value: '2', role_name: 'Regular user' },
     { value: '3', role_name: 'Sales' },
 ];
