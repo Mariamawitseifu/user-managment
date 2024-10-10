@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const logger = require('./logger');
 const { mongoConnect } = require('./database/mongodb'); 
+const { redisClient, connectRedis } = require('./services/redisClient');
 
 const app = express();
 const router = express.Router();
@@ -18,6 +19,9 @@ app.use((req, res, next) => {
     next();
 });
 
+// Connect to Redis
+connectRedis();
+
 // Routes
 const authRoute = require('./routes/authRoute');
 const commonRoute = require('./routes/commonRoute');
@@ -31,12 +35,38 @@ app.use('/api/admin', require('./routes/adminRoute'));
 // Common route
 app.use('/api', commonRoute);
 
+app.get('/', (req, res) => res.send('Testing my Geolocation Node app!'));
+
+// Redis example route
+app.get('/api/cache/:key', async (req, res) => {
+    const { key } = req.params;
+    console.log(`Received request for key: ${key}`);
+
+    try {
+        const cachedData = await redisClient.get(key);
+        console.log('Fetched from Redis:', cachedData);
+
+        if (cachedData) {
+            console.log('Cache hit');
+            return res.json({ data: JSON.parse(cachedData) });
+        } else {
+            console.log('Cache miss');
+            const data = { message: `Fetched data for ${key}` };
+            await redisClient.setEx(key, 3600, JSON.stringify(data));
+            console.log('Data cached in Redis');
+            return res.json({ data });
+        }
+    } catch (err) {
+        console.error('Redis error:', err);
+        return res.status(500).send('Internal Server Error');
+    }
+});
+
 // Auth and Admin Middlewares
 const auth = require('./middlewares/authMiddleware');
 const { onlyAdminAccess } = require('./middlewares/adminMiddleware');
 const routerController = require('./controllers/admin/routerController');
 const { addRouterPermissionValidator } = require('./helpers/adminValidator');
-const seedDatabase = require('./seeds/seed');
 
 // Router for getting routes
 router.get('/get-routes', auth, onlyAdminAccess, addRouterPermissionValidator, routerController.getAllRoutes);
@@ -48,5 +78,3 @@ const port = process.env.SERVER_PORT || 3000;
 app.listen(port, () => {
     logger.info(`Server running on http://localhost:${port}`);
 });
-
-logger.info(`Server will run on port: ${port}`);

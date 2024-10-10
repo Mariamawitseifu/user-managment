@@ -185,17 +185,13 @@ const getUsers = async (req, res) => {
                         permissions: "$permissions.permissions"
                     }
                 }
-            }
-            // .limit(limit)
-            // .skip(startIndex)
+            },
+            { $skip: startIndex },
+            { $limit: limit }
         ]);
 
         // Debugging: Log the number of users fetched and currentUserId
         console.log(`Fetched ${users.length} users excluding ID ${currentUserId}`);
-
-        // const users = await User.find()
-        //     .limit(limit)
-        //     .skip(startIndex);
 
         const totalUsers = await User.countDocuments();
 

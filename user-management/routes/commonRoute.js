@@ -14,7 +14,7 @@ const contactController = require('../controllers/contactController');
 
 //users
 router.post('/create-user', auth,createUserValidator, userController.createUser)
-router.get('/get-users', auth, userController.getUser)
+router.get('/get-users', auth, userController.getUsers)
 router.put('/update-user', auth, updateUserValidator, userController.updateUser)
 router.delete('/delete-user', auth, deleteUserValidator, userController.deleteUser)
 
