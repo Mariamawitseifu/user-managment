@@ -1,9 +1,12 @@
 {
-  "name": "user-management",
+  "name": "@mariamawitseifu/user-management",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "test": "echo 'No tests specified' && exit 0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   },
   "keywords": [],
   "author": "",
