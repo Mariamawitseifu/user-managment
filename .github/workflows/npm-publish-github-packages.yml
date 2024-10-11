@@ -12,8 +12,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: cd usermanagment && npm ci
-      - run: cd usermanagment && npm test
+      - run: cd user-management && npm ci
+      - run: cd user-management && npm test
 
   publish-gpr:
     needs: build
@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: 20
           registry-url: https://npm.pkg.github.com/
-      - run: cd usermanagment && npm ci
-      - run: cd usermanagment && npm publish
+      - run: cd user-management && npm ci
+      - run: cd user-management && npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
