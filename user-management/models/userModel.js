@@ -17,7 +17,9 @@ const userSchema = new mongoose.Schema({
         type:Number,
         default:0 //0 could be for regular users,1 for doctors, etc..
     },
-
 });
 
+userSchema.index({ email: 1 });
+
 module.exports = mongoose.model('User',userSchema);
+

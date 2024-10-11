@@ -5,6 +5,11 @@ const auth = require('../middlewares/authMiddleware');
 const authController = require('../controllers/authController');
 const { registerValidator, loginValidator } = require('../helpers/validator');
 
+router.get('/', (req, res) => {
+    res.json({
+        "message": "Working..."
+    })
+});
 router.post('/register', registerValidator, authController.registerUser);
 router.post('/login', loginValidator, authController.loginUser);
 

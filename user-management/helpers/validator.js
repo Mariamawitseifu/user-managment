@@ -44,3 +44,25 @@ exports.deleteUserValidator = [
     check('id', 'id is required').not().isEmpty(),
 ];
 
+exports.createAccountValidator = [
+    check('name', 'name is required').not().isEmpty(),
+    check('phone', 'phone is required').not().isEmpty(),
+    check('website').isURL().optional().withMessage('Website must be a valid URL'),
+];
+
+exports.updateAccountValidator = [
+    // param('id').isMongoId().withMessage('Invalid account ID'),
+];
+
+exports.createContactValidator = [
+    check('firstName', 'first name is required').not().isEmpty(),
+    check('email', 'Please include a valid email address').isEmail().normalizeEmail({
+        gmail_remove_dots: true
+    }),
+    check('phone', 'phone is required').not().isEmpty(),
+];
+
+exports.updateContactValidator = [
+    // param('id').isMongoId().withMessage('Invalid account ID'),
+];
+

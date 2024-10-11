@@ -1,7 +1,6 @@
 const { default: mongoose } = require('mongoose');
 const User = require('../models/userModel');
 const RouterPermission = require('../models/routerPermissionModel');
-const { router } = require('../routes/commonRoute');
 
 const getUserPermissions = async (user_id) => {
     try {
@@ -53,23 +52,37 @@ const getUserPermissions = async (user_id) => {
     
 }
 
-const getRouterPermission = async (req,res) => {
+// const getRouterPermission = async (req,res) => {
+//     try {
+//         const routerPermission = await RouterPermission.findOne({
+//             router_endpoint: router,
+//             role
+//         }).populate('permission_id');
+
+//         return routerPermission;
+        
+//     } catch (error) {
+//         return res.status(400).json({ 
+//             success: false,
+//             msg: error.message
+
+//         });
+//     }
+// }
+const getRouterPermission = async (role, endpoint) => {
     try {
         const routerPermission = await RouterPermission.findOne({
-            router_endpoint: router,
+            router_endpoint: endpoint, // Use endpoint passed from middleware
             role
         }).populate('permission_id');
 
         return routerPermission;
-        
     } catch (error) {
-        return res.status(400).json({ 
-            success: false,
-            msg: error.message
-
-        });
+        throw new Error(error.message);
     }
-}
+};
+
+
 
 module.exports = {
     getUserPermissions,
