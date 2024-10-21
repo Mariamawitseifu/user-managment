@@ -1,6 +1,5 @@
 const Contact = require('../models/contactModel')
 const { validationResult } = require('express-validator');
-// const { param } = require('../routes/commonRoute');
 const Paginate = require('../services/paginate')
 
 const registerContact = async (req,res) => {
@@ -16,7 +15,7 @@ const registerContact = async (req,res) => {
         }
         const { title, firstName, lastName,phone,email,description,reportsTo,relatedAccount } = req.body;
 
-        const isExistContact = await Contact.findOne({ phone });
+        const isExistContact = await Contact.findUnique({ phone });
 
         if (isExistContact) {
             return res.status(400).json({

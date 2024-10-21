@@ -14,7 +14,11 @@ exports.permissionUpdateValidator = [
 
 exports.storeRoleValidator = [
     check('role_name', 'Permission Name is required').not().isEmpty(),
-    check('value', 'value is required').not().isEmpty(),
+    // check('value', 'value is required').not().isEmpty(),
+    check('value', 'Value is required and must be a number')
+    .not().isEmpty()
+    .isInt()
+    .toInt()
 ];
 
 exports.addRouterPermissionValidator = [

@@ -1,115 +1,50 @@
 const { validationResult } = require('express-validator');
-const User = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const randomstring = require('randomstring');
-const {sendMail} = require('../helpers/mailer');
+const { sendMail } = require('../helpers/mailer');
 const mongoose = require('mongoose');
-const Permission = require('../models/permissionModel');
-const UserPermission = require('../models/userPermissionModel');
+const { redisClient, setCache, getCache } = require('../services/redisClient');
+const {sendAccountCreationEmail} = require('../services/emailService')
+const logger = require('../logger');
+const Paginate = require('../services/paginate');
+const prisma = require('../prisma/prismaClient');
 
 const createUser = async (req, res) => {
     try {
-        // Check for validation errors
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                success: false,
-                msg: 'Validation errors',
-                errors: errors.array()
-            });
+        // Validate request
+        const validationErrors = validateRequest(req);
+        if (validationErrors) {
+            return res.status(400).json(validationErrors);
         }
 
         const { name, email, role, permissions } = req.body;
 
-        // Check if the email already exists
-        const isExists = await User.findOne({ email });
-        if (isExists) {
-            return res.status(400).json({
-                success: false,
-                msg: 'Email already exists!'
-            });
+        // Check for existing user
+        const userExistsResponse = await checkExistingUser(email);
+        if (userExistsResponse) {
+            return res.status(400).json(userExistsResponse);
         }
 
-        // Generate a random password and hash it
-        const password = randomstring.generate(6);
-        const hashPassword = await bcrypt.hash(password, 10);
+        // Generate password and hash it
+        const { password, hashPassword } = await generatePassword();
 
-        // Check if the role is 1 (admin), which cannot be created
-        if (role && role == 1) {
-            return res.status(403).json({
-                success: false,
-                msg: "You can't create admin!",
-            });
+        // Check role restrictions
+        const roleResponse = checkRole(role);
+        if (roleResponse) {
+            return res.status(403).json(roleResponse);
         }
 
-        // Create a new user object
-        const user = new User({
-            name,
-            email,
-            password: hashPassword,
-            role
-        });
-       
-        // Save the user to the database
-        const userData = await user.save();
-        
-        // Initialize permissions array
-        const permissionArray = [];
+        // Create and save user
+        const userData = await saveUser(name, email, hashPassword, role);
 
-        if (permissions && permissions.length > 0) {
-            try {
-                // Fetch and add permissions
-                await Promise.all(permissions.map(async (permission) => {
-                    const permissionData = await Permission.findOne({ _id: permission.id });
-                    if (permissionData) {
-                        permissionArray.push({
-                            permission_name: permissionData.permission_name,
-                            permission_value: permission.value,
-                        });
-                    } else {
-                        console.warn(`Permission with ID ${permission.id} not found`);
-                    }
-                }));
+        // Handle permissions
+        const permissionArray = await handlePermissions(permissions, userData.id);
 
-                if (permissionArray.length > 0) {
-                    const userPermission = new UserPermission({
-                        user_id: userData._id,
-                        permissions: permissionArray
-                    });
+        // Send account creation email
+        await sendAccountCreationEmail(userData, password);
 
-                    await userPermission.save();
-                    console.log('User permissions assigned');
-                }
-            } catch (err) {
-                console.error('Error handling permissions:', err);
-            }
-        }
-        
-        console.log('Generated Password:', password);
-        
-        // Prepare the email content
-        const content = `
-            <p>Hi <b>${userData.name}</b>,</p>
-            <p>Your account has been created. Below are your details:</p>
-            <table style="border-style:none;">
-                <tr>
-                    <th>Name:</th>
-                    <td>${userData.name}</td>
-                </tr>
-                <tr>
-                    <th>Email:</th>
-                    <td>${userData.email}</td>
-                </tr>
-                <tr>
-                    <th>Password:</th>
-                    <td>${password}</td>
-                </tr>
-            </table>
-            <p>You can now log into your account. Thanks!</p>
-        `;
-
-        // Send the email
-        await sendMail(userData.email, 'Account Created', content);
+        // Cache user data (if needed)
+        await cacheUserData(userData);
 
         // Respond with success
         return res.status(201).json({
@@ -121,7 +56,6 @@ const createUser = async (req, res) => {
             }
         });
     } catch (error) {
-        // Handle errors
         console.error('Error creating user:', error);
         return res.status(500).json({
             success: false,
@@ -130,78 +64,147 @@ const createUser = async (req, res) => {
     }
 };
 
-const getUsers = async (req, res) => {
-    try {
-
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-
-        const startIndex = (page - 1) * limit;
-        // Extract the current user ID from the token
-        const currentUserId = req.user._id;
-
-        // Check if the currentUserId is valid
-        if (!mongoose.Types.ObjectId.isValid(currentUserId)) {
-            return res.status(400).json({
-                success: false,
-                msg: 'Invalid user ID',
-                data: null
-            });
+const saveUser = async (name, email, hashPassword, role) => {
+    return await prisma.user.create({
+        data: {
+            name,
+            email,
+            password: hashPassword,
+            role
         }
+    });
+};
 
-        // Perform aggregation to fetch users excluding the current user
-        const users = await User.aggregate([
-            {
-                $match: { 
-                    _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+const handlePermissions = async (permissions, userId) => {
+    const permissionArray = [];
+    if (permissions && permissions.length > 0) {
+        try {
+            const permissionDataArray = await prisma.permission.findMany({
+                where: {
+                    id: {
+                        in: permissions.map(p => p.id)
+                    }
                 }
-            },
-            {
-                $lookup: {
-                    from: "userpermissions",
-                    localField: "_id",
-                    foreignField: "user_id",
-                    as: "permissions"
+            });
+
+            permissionDataArray.forEach(permissionData => {
+                const matchedPermission = permissions.find(p => p.id === permissionData.id);
+                if (matchedPermission) {
+                    permissionArray.push({
+                        permission_name: permissionData.name,
+                        permission_value: matchedPermission.value,
+                    });
                 }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    name: 1,
-                    email: 1,
-                    role: 1,
-                    permissions: {
-                        $cond: {
-                            if: { $isArray: "$permissions" },
-                            then: { $arrayElemAt: ["$permissions", 0] },
-                            else: null
+            });
+
+            if (permissionArray.length > 0) {
+                await prisma.userPermission.create({
+                    data: {
+                        userId: userId,
+                        permissions: {
+                            create: permissionArray
                         }
                     }
-                }
-            },
-            {
-                $addFields: {
-                    permissions: {
-                        permissions: "$permissions.permissions"
-                    }
-                }
-            },
-            { $skip: startIndex },
-            { $limit: limit }
-        ]);
+                });
+                console.log('User permissions assigned');
+            }
+        } catch (err) {
+            console.error('Error handling permissions:', err);
+        }
+    }
+    return permissionArray;
+};
 
-        // Debugging: Log the number of users fetched and currentUserId
-        console.log(`Fetched ${users.length} users excluding ID ${currentUserId}`);
+const validateRequest = (req) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return {
+            success: false,
+            msg: 'Validation errors',
+            errors: errors.array()
+        };
+    }
+    return null;
+};
 
-        const totalUsers = await User.countDocuments();
+const checkExistingUser = async (email) => {
+    const user = await prisma.user.findUnique({
+        where: { email }
+    });
+    
+    if (user) {
+        return {
+            success: false,
+            msg: 'Email already exists!',
+            data: user
+        };
+    }
+    return null;
+};
+const generatePassword = async () => {
+    const password = randomstring.generate(6);
+    const hashPassword = await bcrypt.hash(password, 10);
+    return { password, hashPassword };
+};
 
+const checkRole = (role) => {
+    if (role && role == 1) {
+        return {
+            success: false,
+            msg: "You can't create admin!"
+        };
+    }
+    return null;
+};
 
-        return res.status(200).json({
-            totalUsers,
-            totalPages: Math.ceil(totalUsers / limit),
-            currentPage: page,
-            users
+const cacheUserData = async (userData) => {
+    await setCache(`user:${userData.email}`, JSON.stringify(userData));
+};
+
+const validateUserId = (userId) => {
+    // Example validation logic
+    if (!userId || typeof userId !== 'string') {
+        return { error: 'Invalid user ID' };
+    }
+    return null;
+};
+
+const getUsers = async (req, res) => {
+    try {
+        const limit = Paginate.getLimit(req);
+        const offset = Paginate.getOffset(req);
+        const currentUserId = req.user._id;
+
+        const validationResponse = validateUserId(currentUserId);
+        if (validationResponse) {
+            return res.status(400).json(validationResponse);
+        }
+
+        // Fetch users with pagination using Prisma
+        const users = await prisma.user.findMany({
+            skip: offset,
+            take: limit,
         });
+
+        // Get total user count
+        const count = await prisma.user.count();
+
+        // Prepare paginated response
+        const paginatedResponse = Paginate.getPaginated({ count, rows: users }, res);
+
+        // Format the response to include IDs
+        const formattedResponse = {
+            success: true,
+            totalCount: count,
+            users: paginatedResponse.rows.map(user => ({
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            }))
+        };
+
+        return res.status(200).json(formattedResponse);
     } catch (error) {
         console.error('Error fetching users:', error);
         return res.status(500).json({
@@ -211,95 +214,141 @@ const getUsers = async (req, res) => {
         });
     }
 };
-
-const updateUser = async (req,res) => {
+const getUser = async (req, res) => {
+    const { id } = req.params;
     try {
+        const user = await prisma.user.findUnique({
+            where: { id } 
+        });
 
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                success: false,
-                msg: 'Errors',
-                errors: errors.array()
-            });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
         }
-        const { id, name } = req.body;
+        
+        res.status(200).json(user);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
 
-        const isExists = await User.findOne({
-            _id: id
-        })
-
-        if(!isExists){
-            return res.status(400).json({
-                success: false,
-                msg: 'User not exists!'
-            })
-        }
-        var updateObj = {
-            name
+const updateUser = async (req, res) => {
+    try {
+        const errors = validateRequest(req);
+        if (errors) {
+            return res.status(400).json(errors);
         }
 
-        if(req.body.role != undefined){
-            updateObj.role = req.body.role;
+        const { id, name, role } = req.body;
+        const userExistsResponse = await checkUserExists(id);
+        if (userExistsResponse) {
+            return res.status(400).json(userExistsResponse);
         }
 
-        const updatedData = await User.findByIdAndUpdate({_id: id},{
-            $set:updateObj
-        }, { new: true });
-
-        await UserPermission.findOneAndUpdate(
-            {user_id: updatedData._id},
-            {permissions: permissionArray},
-            {upsert:true, new:true, setDefaultsOnInsert: true}
-        );
-
+        const updatedData = await updateUserData(id, { name, role });
         return res.status(200).json({
             success: true,
-            msg: 'Users Updated successfully',
+            msg: 'User updated successfully',
             data: updatedData
         });
     } catch (error) {
         return res.status(400).json({
             success: false,
             msg: error.message
-        })
-        
-    }
-}
-
-const deleteUser = async (req,res) => {
-    
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({
-            success: false,
-            msg: 'Errors',
-            errors: errors.array()
         });
     }
+};
 
-    const { id, name } = req.body;
+const deleteUser = async (req, res) => {
+    const { id } = req.params; // Get the user ID from the URL parameters
 
-    const isExists = await User.findOne({
-        _id: id
-    })
+    try {
+        const userExists = await prisma.user.findUnique({
+            where: { id }
+        });
 
-    if(!isExists){
-        return res.status(400).json({
+        if (!userExists) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        await prisma.user.delete({
+            where: { id }
+        });
+
+        return res.status(200).json({
+            success: true,
+            msg: 'User deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        return res.status(500).json({
+            success: false,
+            msg: 'Internal server error'
+        });
+    }
+};
+
+
+const checkUserExists = async (id) => {
+    const isExists = await User.findOne({ _id: id });
+    if (!isExists) {
+        return {
             success: false,
             msg: 'User not found!'
-        })
+        };
     }
-    await User.findByIdAndDelete({
-        _id: id
-    });
+    return null;
+};
 
-    return res.status(200).json({
-        success: true,
-        msg: 'Users Deleted successfully',
-    });
+const fetchUsers = async (currentUserId, page, limit) => {
+    const startIndex = (page - 1) * limit;
+    return await User.aggregate([
+        {
+            $match: { 
+                _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+            }
+        },
+        {
+            $lookup: {
+                from: "userpermissions",
+                localField: "_id",
+                foreignField: "user_id",
+                as: "permissions"
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                name: 1,
+                email: 1,
+                role: 1,
+                permissions: {
+                    $cond: {
+                        if: { $isArray: "$permissions" },
+                        then: { $arrayElemAt: ["$permissions", 0] },
+                        else: null
+                    }
+                }
+            }
+        },
+        {
+            $addFields: {
+                permissions: {
+                    permissions: "$permissions.permissions"
+                }
+            }
+        },
+        { $skip: startIndex },
+        { $limit: limit }
+    ]);
+};
 
-}
+const updateUserData = async (id, updateObj) => {
+    return await User.findByIdAndUpdate(
+        { _id: id },
+        { $set: updateObj },
+        { new: true }
+    );
+};
 
 
 module.exports = {
@@ -307,12 +356,5 @@ module.exports = {
     getUsers,
     updateUser,
     deleteUser,
+    getUser,
 };
-
-
-
-
-
-
-
-

@@ -13,11 +13,8 @@ const { permissionAddValidator, permissionDeleteValidator, permissionUpdateValid
 //permission routes
 router.post('/add-permission', auth, onlyAdminAccess,permissionAddValidator,permissionController.addPermission);
 router.get('/get-permission', auth, onlyAdminAccess, permissionController.getPermissions);
-router.delete('/delete-permission', auth, onlyAdminAccess, permissionDeleteValidator,permissionController.deletePermission);
-router.put('/update-permission', auth, onlyAdminAccess, permissionUpdateValidator,permissionController.updatePermission);
-
-// route
-router.get('/get-routes',auth, onlyAdminAccess, routerController.getAllRoutes)
+router.delete('/delete-permission/:id', auth, onlyAdminAccess, permissionDeleteValidator,permissionController.deletePermission);
+router.put('/update-permission/:id', auth, onlyAdminAccess, permissionUpdateValidator,permissionController.updatePermission);
 
 //role routes
 router.post('/store-role', auth, onlyAdminAccess,storeRoleValidator, roleController.storeRole);

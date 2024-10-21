@@ -4,19 +4,20 @@ const router = express();
 const auth = require('../middlewares/authMiddleware');
 // const checkPermission = require('../middlewares/checkPermission');
 
-const { createUserValidator, updateUserValidator, deleteUserValidator, createAccountValidator,updateAccountValidator, createContactValidator,updateContactValidator } = require('../helpers/validator')
+const { createUserValidator, updateUserValidator, createAccountValidator,updateAccountValidator, createContactValidator,updateContactValidator, createLeadValidator } = require('../helpers/validator')
 const userController = require('../controllers/userController')
 
 
 const accountController = require('../controllers/accountController');
 const contactController = require('../controllers/contactController');
-
+const leadController = require('../controllers/leadController');
 
 //users
 router.post('/create-user', auth,createUserValidator, userController.createUser)
 router.get('/get-users', auth, userController.getUsers)
 router.put('/update-user', auth, updateUserValidator, userController.updateUser)
-router.delete('/delete-user', auth, deleteUserValidator, userController.deleteUser)
+router.delete('/delete-user/:id', auth, userController.deleteUser)
+router.get('/get-user/:id', auth, userController.getUser)
 
 
 //account
@@ -35,6 +36,9 @@ router.get('/get-contacts', auth, contactController.getContacts)
 router.patch('/update-contact/:id', auth, updateContactValidator, contactController.updateContact)
 router.delete('/delete-contact/:id', auth, contactController.deleteContact)
 
+
+//lead
+router.post('/create-lead', auth, createLeadValidator, leadController.registerLead)
 
 
 module.exports = router;

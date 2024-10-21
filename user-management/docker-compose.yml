@@ -12,16 +12,19 @@ services:
       - redis
     environment:
       - SERVER_PORT=${SERVER_PORT:-3001}
-      - MONGODB_URI=mongodb://mongo:27017/users-role-perm
+      - MONGODB_URI=mongodb://mongo:27017/users-role-perm?replicaSet=rs0
       - REDIS_URL=redis://redis:6379
     networks:
       - crm-network
   mongo:
     image: mongo
+    command: ["--replSet", "rs0"]
     ports:
       - "27017:27017"
     networks:
       - crm-network
+    volumes:
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js
   redis:
     image: redis:latest
     ports:
@@ -32,6 +35,9 @@ services:
 networks:
   crm-network:
     driver: bridge
+
+
+
 
 
 

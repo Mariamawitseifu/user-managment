@@ -1,11 +1,8 @@
-const User = require('../models/userModel');
 const { validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Permission = require('../models/permissionModel');
-const UserPermission = require('../models/userPermissionModel');
 const helper = require('../helpers/helper')
-
+const prisma = require('../prisma/prismaClient');
 
 const registerUser = async (req, res) => {
     try {
@@ -21,7 +18,10 @@ const registerUser = async (req, res) => {
 
         const { name, email, password, role } = req.body;
 
-        const isExistUser = await User.findOne({ email });
+        // Check if user already exists
+        const isExistUser = await prisma.user.findUnique({
+            where: { email }
+        });
 
         if (isExistUser) {
             return res.status(400).json({
@@ -32,61 +32,42 @@ const registerUser = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const user = new User({
-            name,
-            email,
-            password: hashedPassword,
-            role
+        // Create the user
+        const userData = await prisma.user.create({
+            data: {
+                name,
+                email,
+                password: hashedPassword,
+                role
+            }
         });
 
-        const userData = await user.save();
-
-        // Permission.find({
-        //     is_default:1
-        // });
-
-        const defaultPermissions = await Permission.find({
-            is_default: 1
-        });
-
-        if(defaultPermissions.length > 0){
-            const permissionArray = [];
-            defaultPermissions.forEach(permission => {
-                permissionArray.push({
-                    permission_name:permission.permission_name,
-                    permission_value:[0,1,2,3]
-
-                });
-            })
-
-            const userPermission = new UserPermission({
-                user_id:userData._id,
-                permissions:permissionArray
-            });
-
-            await userPermission.save();
-        }
-       
+        
+        // Return the created user data including the ID
         return res.status(201).json({
             success: true,
             msg: 'Registered successfully',
-            data: userData
+            data: {
+                id: userData.id,
+                name: userData.name,
+                email: userData.email,
+                role: userData.role
+            }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Error during registration:', error);
         return res.status(500).json({
             success: false,
-            msg: error.message
+            msg: 'Internal server error',
+            data: null
         });
     }
 };
 
-
-const loginUser = async(req,res) => {
+const loginUser = async (req, res) => {
     try {
-        //check if user exists
+        // Check for validation errors
         const errors = validationResult(req);
-
         if (!errors.isEmpty()) {
             return res.status(400).json({
                 success: false,
@@ -94,88 +75,67 @@ const loginUser = async(req,res) => {
                 errors: errors.array()
             });
         }
-        // get credential
-        const {email,password} = req.body;
 
-        // validate email and password credentials
+        // Get credentials from request
+        const { email, password } = req.body;
 
-        const userData = await User.findOne({ email });
-
-        if(!userData){
-            return res.status(400).json({
-                success:false,
-                msg: "Email and Password is incorrect"
-            })
-        }
-
-       const isPasswordMatch = await bcrypt.compare(password, userData.password);
-       
-       if(!isPasswordMatch){
-        return res.status(400).json({
-            success: false,
-            msg: 'Email and password is incorrect'
+        // Find the user by email
+        const userData = await prisma.user.findUnique({
+            where: { email }
         });
-       }
 
-       const accessToken = await generateAccessToken({user:userData});
-
-    const result = await User.aggregate([
-        {
-            $match: { email: userData.email }
-        },
-        {
-            $lookup: {
-                from: "userpermissions", 
-                localField: "_id",    
-                foreignField: "user_id", 
-                as: "permissions"        
-            }
-        },
-        {
-            $unwind: { 
-                path: "$permissions",     
-                preserveNullAndEmptyArrays: true 
-            }
-        },
-        {
-            $project: {
-                _id: 0,
-                name: 1,
-                email: 1,
-                role: 1,
-                permissions: "$permissions.permissions" 
-            }
+        // If user does not exist
+        if (!userData) {
+            return res.status(400).json({
+                success: false,
+                msg: 'Email and password are incorrect'
+            });
         }
-    ]);
-    
-    // Check the result
-    console.log('Aggregation Result:', result);
 
-        // Send response with permissions
-        if (result.length > 0) {
+        // Compare passwords
+        const isPasswordMatch = await bcrypt.compare(password, userData.password);
+        if (!isPasswordMatch) {
+            return res.status(400).json({
+                success: false,
+                msg: 'Email and password are incorrect'
+            });
+        }
+
+        // Generate access token
+        const accessToken = await generateAccessToken({ user: userData });
+
+        // Fetch user permissions
+        const permissions = await prisma.userPermission.findMany({
+            where: {
+                userId: userData.id, 
+            },
+            select: {
+                permissions: true,
+            }
+        });
+
+        // Send response
         return res.status(200).json({
             success: true,
-            msg: 'Login Successfully',
+            msg: 'Login successfully',
             accessToken,
             tokenType: 'Bearer',
-            data: result[0] 
+            data: {
+                id: userData.id,
+                name: userData.name,
+                email: userData.email,
+                role: userData.role,
+                permissions: permissions.map(permission => permission.permissions)
+            }
         });
-    } else {
-        return res.status(400).json({
-            success: false,
-            msg: 'No permissions found'
-        });
-    }
-
     } catch (error) {
-        console.error(error);
+        console.error('Error during login:', error);
         return res.status(500).json({
             success: false,
-            msg: error.message
+            msg: 'Internal server error'
         });
     }
-
-}
+};
 
 const generateAccessToken = async(user) => {
     const token =jwt.sign(user, process.env.ACCESS_SECRET_TOKEN, {expiresIn:"2h"});
@@ -186,7 +146,7 @@ const getProfile = async(req,res) => {
     try{
 
         const user_id = req.user._id;
-        const userData = await User.findOne({_id:user_id});
+        const userData = await User.findUnique({_id:user_id});
 
         return res.status(400).json({
             success: true,
@@ -203,29 +163,54 @@ const getProfile = async(req,res) => {
 }
 
 const getUserPermissions = async (req, res) => {
-    try{
-        const user_id = req.user._id;
+    try {
+        const user_id = req.user.id; // Get the user ID from the request
 
-        const userPermissions = await helper.getUserPermissions(user_id);
-        console.log(helper)
+        // Fetch user permissions
+        const userPermissions = await prisma.userPermission.findMany({
+            where: {
+                userId: user_id, // Filter by the user's ID
+            },
+            include: {
+                permissions: true, // Include related permissions
+            },
+        });
+
+        if (!userPermissions.length) {
+            return res.status(404).json({
+                success: false,
+                msg: 'No permissions found for this user',
+            });
+        }
+
+        // Extract the permissions from the userPermissions
+        const permissions = userPermissions.flatMap(userPerm => 
+            userPerm.permissions.map(perm => ({
+                permissionName: perm.permissionName,
+                permissionValue: perm.permissionValue,
+            }))
+        );
+
         return res.status(200).json({
             success: true,
             msg: 'User Permissions',
-            data:userPermissions
-        })
-    }
-    catch(error){
-        return res.status(400).json({
+            data: permissions,
+        });
+    } catch (error) {
+        console.error('Error fetching user permissions:', error);
+        return res.status(500).json({
             success: false,
-            msg: error.message
+            msg: error.message,
         });
     }
+};
 
-}
 
 module.exports = {
     registerUser,
     loginUser,
     getProfile,
     getUserPermissions,
+    loginUser,
+    create: exports.create
 };

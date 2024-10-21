@@ -1,9 +1,12 @@
 const mongoose = require('mongoose');
+const LeadStatusEnum = require('../services/enum')
+
 
 const leadSchema = new mongoose.Schema({
     status:{
-        type:Boolean,
-        required:true
+        type:mongoose.Schema.Types.ObjectId,
+        ref:'LeadStatusEnum'
+        // required:false
     },
     relatedContact:{
         type:mongoose.Schema.Types.ObjectId,
@@ -15,11 +18,12 @@ const leadSchema = new mongoose.Schema({
     },
     relatedAccount:{
         type:mongoose.Schema.Types.ObjectId,
-        ref:'Account'
+        ref:'Account',
+        required:false
     },
     leadDate:{
         type:Date,
-        required:true
+        required:false
     },
     checkIn: {
         location: {
@@ -43,7 +47,7 @@ const leadSchema = new mongoose.Schema({
     },    
     leadStatus: {
         type: String, // Change this to your actual enumerator type
-        required: true
+        required: false
     },
     // leadStatus:{
     //     type:Enumerator,

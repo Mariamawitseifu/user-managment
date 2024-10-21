@@ -1,14 +1,14 @@
-const mongoose = require('mongoose');
+// const mongoose = require('mongoose');
 
-const permissionSchema = new mongoose.Schema({
-    permission_name:{
-        type:String,
-        required:true,
-    },
-    is_default:{
-        type:Number,
-        default:0
-    },
-});
+// const permissionSchema = new mongoose.Schema({
+//     permission_name:{
+//         type:String,
+//         required:true,
+//     },
+//     is_default:{
+//         type:Number,
+//         default:0
+//     },
+// });
 
-module.exports = mongoose.model('Permission',permissionSchema);
+// module.exports = mongoose.model('Permission',permissionSchema);
