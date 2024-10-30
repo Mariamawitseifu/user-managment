@@ -15,7 +15,7 @@ const leadController = require('../controllers/leadController');
 //users
 router.post('/create-user', auth,createUserValidator, userController.createUser)
 router.get('/get-users', auth, userController.getUsers)
-router.put('/update-user', auth, updateUserValidator, userController.updateUser)
+router.put('/update-user/:id', auth, updateUserValidator, userController.updateUser)
 router.delete('/delete-user/:id', auth, userController.deleteUser)
 router.get('/get-user/:id', auth, userController.getUser)
 

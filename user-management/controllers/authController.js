@@ -169,10 +169,10 @@ const getUserPermissions = async (req, res) => {
         // Fetch user permissions
         const userPermissions = await prisma.userPermission.findMany({
             where: {
-                userId: user_id, // Filter by the user's ID
+                userId: user_id, 
             },
             include: {
-                permissions: true, // Include related permissions
+                permissions: true,
             },
         });
 
@@ -211,6 +211,5 @@ module.exports = {
     loginUser,
     getProfile,
     getUserPermissions,
-    loginUser,
-    create: exports.create
+    // create: exports.create
 };

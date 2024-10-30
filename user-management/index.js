@@ -62,6 +62,26 @@ app.get('/api/cache/:key', async (req, res) => {
     }
 });
 
+app.post('/tag-location', (req, res) => {
+    const { latitude, longitude } = req.body;
+
+    if (latitude === undefined || longitude === undefined) {
+        return res.status(400).json({ error: 'Latitude and Longitude are required' });
+    }
+
+    // Log the received location
+    console.log(`Received location: Latitude: ${latitude}, Longitude: ${longitude}`);
+
+    // Respond with a success message
+    res.json({
+        message: 'Location received successfully',
+        location: {
+            latitude,
+            longitude,
+        },
+    });
+});
+
 // Auth and Admin Middlewares
 const auth = require('./middlewares/authMiddleware');
 const { onlyAdminAccess } = require('./middlewares/adminMiddleware');

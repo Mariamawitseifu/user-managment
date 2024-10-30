@@ -8,6 +8,7 @@ const {sendAccountCreationEmail} = require('../services/emailService')
 const logger = require('../logger');
 const Paginate = require('../services/paginate');
 const prisma = require('../prisma/prismaClient');
+const prismaQuery =require('../services/prismaQuery')
 
 const createUser = async (req, res) => {
     try {
@@ -82,18 +83,27 @@ const handlePermissions = async (permissions, userId) => {
             const permissionDataArray = await prisma.permission.findMany({
                 where: {
                     id: {
-                        in: permissions.map(p => p.id)
-                    }
-                }
+                        in: permissions.map(p => p.id),
+                    },
+                },
             });
+
+            // Log the fetched permissions for debugging
+            console.log('Fetched Permissions:', permissionDataArray);
 
             permissionDataArray.forEach(permissionData => {
                 const matchedPermission = permissions.find(p => p.id === permissionData.id);
                 if (matchedPermission) {
-                    permissionArray.push({
-                        permission_name: permissionData.name,
-                        permission_value: matchedPermission.value,
-                    });
+                    if (permissionData.permissionName) { // Ensure permissionName is defined
+                        permissionArray.push({
+                            permission_name: permissionData.permissionName, // Use correct field
+                            permission_value: matchedPermission.value,
+                        });
+                    } else {
+                        console.warn(`Permission data with ID ${permissionData.id} has no name`);
+                    }
+                } else {
+                    console.warn(`No matching permission found for ID: ${permissionData.id}`);
                 }
             });
 
@@ -102,14 +112,19 @@ const handlePermissions = async (permissions, userId) => {
                     data: {
                         userId: userId,
                         permissions: {
-                            create: permissionArray
-                        }
-                    }
+                            create: permissionArray.map(permission => ({
+                                permissionName: permission.permission_name,
+                                permissionValue: permission.permission_value,
+                            })),
+                        },
+                    },
                 });
-                console.log('User permissions assigned');
+                logger.info('User permissions assigned');
+            } else {
+                logger.warn('No valid permissions to assign');
             }
         } catch (err) {
-            console.error('Error handling permissions:', err);
+            logger.error('Error handling permissions:', err);
         }
     }
     return permissionArray;
@@ -162,51 +177,130 @@ const cacheUserData = async (userData) => {
 };
 
 const validateUserId = (userId) => {
-    // Example validation logic
     if (!userId || typeof userId !== 'string') {
+        console.error('Validation failed for user ID:', userId);
         return { error: 'Invalid user ID' };
     }
     return null;
 };
 
-const getUsers = async (req, res) => {
+// const getUser = async (req, res) => {
+//     try {
+//         // Extract the current user ID from the token
+//         const currentUserId = req.user._id;
+
+//         // Check if the currentUserId is valid
+//         if (!mongoose.Types.ObjectId.isValid(currentUserId)) {
+//             return res.status(400).json({
+//                 success: false,
+//                 msg: 'Invalid user ID',
+//                 data: null
+//             });
+//         }
+
+//         // Perform aggregation to fetch users excluding the current user
+//         const users = await User.aggregate([
+//             {
+//                 $match: { 
+//                     _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+//                 }
+//             },
+//             {
+//                 $lookup: {
+//                     from: "userpermissions",
+//                     localField: "_id",
+//                     foreignField: "user_id",
+//                     as: "permissions"
+//                 }
+//             },
+//             {
+//                 $project: {
+//                     _id: 0,
+//                     name: 1,
+//                     email: 1,
+//                     role: 1,
+//                     permissions: {
+//                         $cond: {
+//                             if: { $isArray: "$permissions" },
+//                             then: { $arrayElemAt: ["$permissions", 0] },
+//                             else: null
+//                         }
+//                     }
+//                 }
+//             },
+//             {
+//                 $addFields: {
+//                     permissions: {
+//                         permissions: "$permissions.permissions"
+//                     }
+//                 }
+//             }
+//         ]);
+
+//         // Debugging: Log the number of users fetched and currentUserId
+//         console.log(`Fetched ${users.length} users excluding ID ${currentUserId}`);
+
+//         return res.status(200).json({
+//             success: true,
+//             msg: 'Users fetched successfully!',
+//             data: users
+//         });
+//     } catch (error) {
+//         console.error('Error fetching users:', error);
+//         return res.status(500).json({
+//             success: false,
+//             msg: 'Internal server error',
+//             data: null
+//         });
+//     }
+// };
+
+
+const getUser = async (req, res) => {
     try {
-        const limit = Paginate.getLimit(req);
-        const offset = Paginate.getOffset(req);
+        // Extract the current user ID from the token
         const currentUserId = req.user._id;
 
-        const validationResponse = validateUserId(currentUserId);
-        if (validationResponse) {
-            return res.status(400).json(validationResponse);
+        // Check if the currentUserId is valid
+        if (!mongoose.Types.ObjectId.isValid(currentUserId)) {
+            return res.status(400).json({
+                success: false,
+                msg: 'Invalid user ID',
+                data: null
+            });
         }
 
-        // Fetch users with pagination using Prisma
-        const users = await prisma.user.findMany({
-            skip: offset,
-            take: limit,
+        // Fetch user data along with permissions
+        const user = await prisma.user.findUnique({
+            where: { id: currentUserId },
+            include: {
+                permissions: true // Include user permissions
+            }
         });
 
-        // Get total user count
-        const count = await prisma.user.count();
+        // Check if the user exists
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                msg: 'User not found',
+                data: null
+            });
+        }
 
-        // Prepare paginated response
-        const paginatedResponse = Paginate.getPaginated({ count, rows: users }, res);
-
-        // Format the response to include IDs
-        const formattedResponse = {
+        // Respond with user data and permissions
+        return res.status(200).json({
             success: true,
-            totalCount: count,
-            users: paginatedResponse.rows.map(user => ({
+            msg: 'User fetched successfully!',
+            data: {
                 id: user.id,
                 name: user.name,
                 email: user.email,
                 role: user.role,
-            }))
-        };
-
-        return res.status(200).json(formattedResponse);
+                permissions: user.permissions 
+            }
+        });
     } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('Error fetching user:', error);
         return res.status(500).json({
             success: false,
             msg: 'Internal server error',
@@ -214,20 +308,53 @@ const getUsers = async (req, res) => {
         });
     }
 };
-const getUser = async (req, res) => {
-    const { id } = req.params;
+
+const getUsers = async (req, res) => {
+    const { page = 1, limit = 10 } = req.query;
+    const currentUserId = req.user._id;
+
     try {
-        const user = await prisma.user.findUnique({
-            where: { id } 
+        // Define the where clause for counting
+        const whereClause = {
+            ...getSoftDeleteQuery(false), // Adjust as needed
+        };
+
+        // Count total users directly
+        const totalUsers = await prisma.user.count({
+            where: whereClause,
         });
 
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+        // Fetch users with pagination
+        const users = await prisma.user.findMany({
+            where: whereClause,
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            skip: (page - 1) * limit,
+        });
+
+        if (!users || users.length === 0) {
+            return res.status(200).json({ success: true, msg: 'No users found', data: [] });
         }
-        
-        res.status(200).json(user);
+
+        // Calculate total pages
+        const totalPages = Math.ceil(totalUsers / limit);
+
+        res.status(200).json({
+            success: true,
+            msg: 'Users fetched successfully!',
+            data: {
+                users,
+                pagination: {
+                    currentPage: page,
+                    totalUsers,
+                    totalPages,
+                    limit,
+                },
+            },
+        });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, msg: 'Internal server error', error: error.message });
     }
 };
 
@@ -259,7 +386,7 @@ const updateUser = async (req, res) => {
 };
 
 const deleteUser = async (req, res) => {
-    const { id } = req.params; // Get the user ID from the URL parameters
+    const { id } = req.params;
 
     try {
         const userExists = await prisma.user.findUnique({
@@ -287,7 +414,6 @@ const deleteUser = async (req, res) => {
     }
 };
 
-
 const checkUserExists = async (id) => {
     const isExists = await User.findOne({ _id: id });
     if (!isExists) {
@@ -299,56 +425,96 @@ const checkUserExists = async (id) => {
     return null;
 };
 
+// const fetchUsers = async (currentUserId, page, limit) => {
+//     const startIndex = (page - 1) * limit;
+//     return await prisma.user.findMany.aggregate([
+//         {
+//             $match: { 
+//                 _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
+//             }
+//         },
+//         {
+//             $lookup: {
+//                 from: "userpermissions",
+//                 localField: "_id",
+//                 foreignField: "user_id",
+//                 as: "permissions"
+//             }
+//         },
+//         {
+//             $project: {
+//                 _id: 0,
+//                 name: 1,
+//                 email: 1,
+//                 role: 1,
+//                 permissions: {
+//                     $cond: {
+//                         if: { $isArray: "$permissions" },
+//                         then: { $arrayElemAt: ["$permissions", 0] },
+//                         else: null
+//                     }
+//                 }
+//             }
+//         },
+//         {
+//             $addFields: {
+//                 permissions: {
+//                     permissions: "$permissions.permissions"
+//                 }
+//             }
+//         },
+//         { $skip: startIndex },
+//         { $limit: limit }
+//     ]);
+// };
 const fetchUsers = async (currentUserId, page, limit) => {
     const startIndex = (page - 1) * limit;
-    return await User.aggregate([
-        {
-            $match: { 
-                _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
-            }
+
+    const users = await prisma.user.findMany({
+        where: {
+            id: {
+                not: currentUserId,
+            },
         },
-        {
-            $lookup: {
-                from: "userpermissions",
-                localField: "_id",
-                foreignField: "user_id",
-                as: "permissions"
-            }
+        skip: startIndex,
+        take: limit,
+        include: {
+            userPermissions: {
+                include: {
+                    permissions: true,
+                },
+            },
         },
-        {
-            $project: {
-                _id: 0,
-                name: 1,
-                email: 1,
-                role: 1,
-                permissions: {
-                    $cond: {
-                        if: { $isArray: "$permissions" },
-                        then: { $arrayElemAt: ["$permissions", 0] },
-                        else: null
-                    }
-                }
-            }
-        },
-        {
-            $addFields: {
-                permissions: {
-                    permissions: "$permissions.permissions"
-                }
-            }
-        },
-        { $skip: startIndex },
-        { $limit: limit }
-    ]);
+    });
+
+    // Flatten permissions
+    return users.map(user => ({
+        ...user,
+        permissions: user.userPermissions.flatMap(up => up.permissions.map(p => ({
+            permissionName: p.name,
+            permissionValue: p.value,
+        }))),
+    }));
 };
 
+
+
+// const updateUserData = async (id, updateObj) => {
+//     return await prisma.user.findUnique(
+//         { _id: id },
+//         { $set: updateObj },
+//         { new: true }
+//     );
+// };
+
+
 const updateUserData = async (id, updateObj) => {
-    return await User.findByIdAndUpdate(
-        { _id: id },
-        { $set: updateObj },
-        { new: true }
-    );
+    return await prisma.user.update({
+        where: { id },
+        data: updateObj, 
+    });
 };
+
 
 
 module.exports = {

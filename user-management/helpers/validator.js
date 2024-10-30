@@ -40,10 +40,6 @@ exports.updateUserValidator = [
     check('name', 'name is required').not().isEmpty(),
 ];
 
-// exports.deleteUserValidator = [
-//     check('id', 'id is required').not().isEmpty(),
-// ];
-
 exports.createAccountValidator = [
     check('name', 'name is required').not().isEmpty(),
     check('phone', 'phone is required').not().isEmpty(),
@@ -70,4 +66,3 @@ exports.createLeadValidator = [
     check('relatedContact', 'Contact is required').not().isEmpty(),
     check('relatedUser', 'User is required').not().isEmpty(),
 ];
-

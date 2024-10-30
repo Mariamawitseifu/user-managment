@@ -1,122 +1,90 @@
-const mongoose = require('mongoose');
-require('dotenv').config();
-const User = require('../models/userModel'); 
-const Permission = require('../models/permissionModel'); 
-const Role = require('../models/roleModel');
-const UserPermission = require('../models/userPermissionModel');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 const rolesData = [
-    { value: '1', role_name: 'Admin' },
-    { value: '2', role_name: 'Regular user' },
-    { value: '3', role_name: 'Sales' },
+  { role_name: 'Admin', value: '1' },
+  { role_name: 'Regular user', value: '2' },
+  { role_name: 'Sales', value: '3' },
 ];
 
 const usersData = [
-    {
-        name: 'John Doe',
-        email: 'john@example.com',
-        role: '1', 
-        password: '123456',
-    },
-    {
-        name: 'Jane Smith',
-        email: 'jane@example.com',
-        role: '3',
-        password: '123456',
-    },
-    {
-        name: 'Doe',
-        email: 'doe@example.com',
-        role: '1', 
-        password: '123456',
-    },
-    {
-        name: 'Smith',
-        email: 'smith@example.com',
-        role: '3',
-        password: '123456',
-    },
+  {
+    name: 'John Doe',
+    email: 'john@example.com',
+    role: '1',
+    password: '123456',
+  },
+  {
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    role: '3',
+    password: '123456',
+  },
 ];
 
 const permissionsData = [
-    {
-        permission_name: 'view_reports',
-        permission_value: [1], // Assuming 1 means allowed
-    },
-    {
-        permission_name: 'edit_user',
-        permission_value: [0], // Assuming 0 means not allowed
-    },
+  {
+    permission_name: 'view_reports',
+    permission_value: 1,
+  },
+  {
+    permission_name: 'edit_user',
+    permission_value: 0,
+  },
 ];
 
 const userPermissionsData = [
-    {
-        user_id: null, // Will be set later
-        permissions: [
-            { permission_name: 'view_reports', permission_value: [1] },
-            { permission_name: 'edit_user', permission_value: [0] },
-        ],
-    },
-    {
-        user_id: null, // Will be set later
-        permissions: [
-            { permission_name: 'view_reports', permission_value: [1] },
-            { permission_name: 'edit_user', permission_value: [1] },
-        ],
-    },
+  {
+    userId: null, // Will be set later
+    permissions: [
+      { permission_name: 'view_reports', permission_value: 1 },
+      { permission_name: 'edit_user', permission_value: 0 },
+    ],
+  },
+  {
+    userId: null, // Will be set later
+    permissions: [
+      { permission_name: 'view_reports', permission_value: 1 },
+      { permission_name: 'edit_user', permission_value: 1 },
+    ],
+  },
 ];
 
 const seedDatabase = async () => {
-    try {
-        await mongoose.connect('mongodb://mongo:27017/users-role-perm', {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
+  try {
+    // Clear existing data
+    await prisma.user.deleteMany({});
+    await prisma.role.deleteMany({});
+    await prisma.permission.deleteMany({});
+    await prisma.userPermission.deleteMany({});
 
-        // Clear existing data
-        await User.deleteMany({});
-        await Permission.deleteMany({});
-        await Role.deleteMany({});
-        await UserPermission.deleteMany({});
+    // Insert roles
+    const createdRoles = await prisma.role.createMany({ data: rolesData });
 
-        // Insert roles
-        const createdRoles = await Role.insertMany(rolesData);
+    // Insert permissions
+    const createdPermissions = await prisma.permission.createMany({ data: permissionsData });
 
-        // Map roles to user data and hash passwords
-        const usersWithHashedPasswords = await Promise.all(usersData.map(async (user) => {
-            const role = createdRoles.find(r => r.value === user.role);
-            if (role) {
-                user.role = role._id; // Set the user role to the role ID
-            }
-
-            const password = randomstring.generate(6);
-            user.password = await bcrypt.hash(password, 10); // Hash the password
-
-            console.log(`Generated Password for ${user.name}: ${password}`); // Log the plain password
-            return user; // Return the updated user object
-        }));
-
-        // Insert users
-        const createdUsers = await User.insertMany(usersWithHashedPasswords);
-
-        // Insert permissions
-        const createdPermissions = await Permission.insertMany(permissionsData);
-
-        // Map user IDs to userPermissionsData
-        userPermissionsData[0].user_id = createdUsers[0]._id; // John Doe's permissions
-        userPermissionsData[1].user_id = createdUsers[1]._id; // Jane Smith's permissions
-
-        // Insert user permissions
-        await UserPermission.insertMany(userPermissionsData);
-
-        console.log('Data seeded successfully!');
-    } catch (error) {
-        console.error('Error seeding data:', error);
-    } finally {
-        mongoose.connection.close();
+    // Insert users and map roles
+    for (const user of usersData) {
+      const role = await prisma.role.findUnique({ where: { value: user.role } });
+      const hashedPassword = await bcrypt.hash(user.password, 10); // Hash the password
+      await prisma.user.create({
+        data: {
+          name: user.name,
+          email: user.email,
+          password: hashedPassword,
+          roleId: role.id, // Set the user role to the role ID
+        },
+      });
     }
-};
 
+    console.log('Data seeded successfully!');
+  } catch (error) {
+    console.error('Error seeding data:', error);
+  } finally {
+    await prisma.$disconnect();
+  }
+};
 
 seedDatabase();
 

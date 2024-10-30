@@ -24,19 +24,19 @@ model User {
   updatedAt       DateTime         @updatedAt
   deletedAt       DateTime? 
 }
-
 model RouterPermission {
-    id              String     @id @default(uuid()) @map("_id")
-    router_endpoint String
-    role            String
-    permission      Permission @relation(fields: [permissionId], references: [id])
-    permissionId    String
+    id                String     @id @default(uuid()) @map("_id") 
+    router_endpoint   String     @unique 
+    role              String   
+    permissionId      String     @map("permission_id") 
+    permission        String[]   @default([])
 
-
+    permissionRelation Permission @relation(fields: [permissionId], references: [id]) 
     @@unique([router_endpoint, role]) 
 }
 
-model Permission {
+
+ model Permission {
     id             String           @id @default(uuid()) @map("_id")
     permissionName String           @unique
     isDefault      Int              @default(0)
@@ -65,3 +65,17 @@ model PermissionDetail {
   permissionName   String
   permissionValue  Int[]
 }
+
+model Account {
+    id               String         @id @default(uuid()) @map("_id")
+    name        String
+    website     String
+    type        String
+    description String
+    phone       String[]            @unique
+    address     String
+    // parentAccount Account? @relation("AccountHierarchy", fields: [parentAccountId], references: [id])
+    // parentAccountId String?
+}
+
+

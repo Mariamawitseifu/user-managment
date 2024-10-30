@@ -1,7 +1,8 @@
 const Account = require('../models/accountModel');
 const { validationResult } = require('express-validator');
+const prisma = require('../prisma/prismaClient');
 
-const registerAccount = async (req,res) => {
+const registerAccount = async (req, res) => {
     try {
         const errors = validationResult(req);
 
@@ -12,8 +13,10 @@ const registerAccount = async (req,res) => {
                 errors: errors.array()
             });
         }
+
         const { name, website, type, description, phone, address, parentAccount } = req.body;
 
+        // Normalize phone input to an array
         let phoneNumbers = Array.isArray(phone) ? phone : [phone];
 
         // Check if the phoneNumbers array has at least one number
@@ -24,29 +27,35 @@ const registerAccount = async (req,res) => {
             });
         }
 
-        // Check for duplicates in the array
-        const existingAccounts = await Account.find({ phone: { $in: phoneNumbers } });
+        // Check for duplicates in the phone numbers array
+        const existingAccounts = await prisma.account.findMany({
+            where: {
+                phone: {
+                    hasSome: phoneNumbers,
+                },
+            },
+        });
 
         if (existingAccounts.length > 0) {
             return res.status(400).json({
                 success: false,
                 msg: 'One or more phone numbers already exist',
-                existingPhones: existingAccounts.map(account => account.phone).flat()
+                existingPhones: existingAccounts.flatMap(account => account.phone), // Flatten the phone numbers
             });
         }
 
-
-        const account = new Account({
-            name,
-            website,
-            type,
-            description,
-            phone:phoneNumbers,
-            address,
-            parentAccount,
+        // Save the new account
+        const accountData = await prisma.account.create({
+            data: {
+                name,
+                website,
+                type,
+                description,
+                phone: phoneNumbers, // Store the array of phone numbers
+                address,
+                // parentAccountId: parentAccount, // Uncomment if you have a parent account
+            }
         });
-        
-        const accountData = await account.save();
 
         return res.status(201).json({
             success: true,
@@ -68,31 +77,36 @@ const getAccounts = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
 
-        // Calculate the starting index for the query
+        // Calculate the starting index for pagination
         const startIndex = (page - 1) * limit;
 
         // Fetch the accounts with pagination
-        const accounts = await Account.find()
-            .limit(limit)
-            .skip(startIndex);
+        const accounts = await prisma.account.findMany({
+            skip: startIndex,
+            take: limit,
+        });
 
-        const totalAccounts = await Account.countDocuments();
+        const totalAccounts = await prisma.account.count();
 
         res.status(200).json({
             totalAccounts,
             totalPages: Math.ceil(totalAccounts / limit),
             currentPage: page,
-            accounts
+            accounts,
         });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: error.message });
     }
 };
 
+
 const getAccount = async (req,res) => {
     const { id } =req.params;
     try {
-        const account = await Account.findById(id);
+        const account = await prisma.account.findUnique({
+            where:{id}
+        });
 
         if (!account){
             return res.status(404).json({message: 'Account not found'});
@@ -103,10 +117,10 @@ const getAccount = async (req,res) => {
     }
 }
 
-const updateAccount = async (req,res) => {
+const updateAccount = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
-    
+
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -116,24 +130,35 @@ const updateAccount = async (req,res) => {
                 errors: errors.array()
             });
         }
-        
-        const updatedAccount = await Account.findByIdAndUpdate(id, updates, {new:true});
 
-        if (!updatedAccount) {
-            return res.status(404).json({ message: 'Account not found' });
-        }
+        // Use the correct syntax for the update method
+        const updatedAccount = await prisma.account.update({
+            where: { id: Number(id) },  // Ensure id is a number if needed
+            data: updates,
+        });
+
         res.status(200).json(updatedAccount);
     } catch (error) {
+        if (error.code === 'P2025') { // Record not found
+            return res.status(404).json({ message: 'Account not found' });
+        }
         res.status(400).json({ error: error.message });
     }
 };
+
 
 const deleteAccount = async (req,res) => {
 
     const {id} = req.params;
 
     try {
-        const deletedAccount = await Account.findByIdAndDelete(id);
+        // const accountExists = await prisma.account.findUnique({
+        //     where: {id}
+        // });
+        const deletedAccount = await prisma.account.findUnique({
+            where: {id}
+        });
+        await prisma.account.delete({ where: {id}});
         if (!deletedAccount) {
             return res.status(404).json({ message: 'Account not found' });
         }
