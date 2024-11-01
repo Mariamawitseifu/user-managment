@@ -3,8 +3,6 @@ const prisma = require('../../prisma/prismaClient');
 
 const addPermission = async (req, res) => {
     try {
-        console.log('Request body:', req.body);
-
         // Validate request
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -37,7 +35,7 @@ const addPermission = async (req, res) => {
 
         // Create and save new permission
         const obj = {
-            permissionName: permission_name, // Use the correct field name
+            permissionName: permission_name,
             ...(req.body.default != null ? { isDefault: parseInt(req.body.default) } : {})
         };
 
@@ -48,7 +46,7 @@ const addPermission = async (req, res) => {
         return res.status(201).json({
             success: true,
             msg: 'Permission added successfully',
-            data: savedPermission // Optionally return the saved permission data
+            data: savedPermission
         });
 
     } catch (error) {
@@ -59,7 +57,6 @@ const addPermission = async (req, res) => {
         });
     }
 };
-
 
 const getPermissions = async (req, res) => {
     try {
@@ -201,7 +198,6 @@ const updatePermission = async (req, res) => {
         });
     }
 };
-
 
 
 module.exports = {
