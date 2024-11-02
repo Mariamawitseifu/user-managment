@@ -76,59 +76,59 @@ const saveUser = async (name, email, hashPassword, role) => {
     });
 };
 
-const handlePermissions = async (permissions, userId) => {
-    const permissionArray = [];
-    if (permissions && permissions.length > 0) {
-        try {
-            const permissionDataArray = await prisma.permission.findMany({
-                where: {
-                    id: {
-                        in: permissions.map(p => p.id),
-                    },
-                },
-            });
+// const handlePermissions = async (permissions, userId) => {
+//     const permissionArray = [];
+//     if (permissions && permissions.length > 0) {
+//         try {
+//             const permissionDataArray = await prisma.permission.findMany({
+//                 where: {
+//                     id: {
+//                         in: permissions.map(p => p.id),
+//                     },
+//                 },
+//             });
 
-            // Log the fetched permissions for debugging
-            console.log('Fetched Permissions:', permissionDataArray);
+//             // Log the fetched permissions for debugging
+//             console.log('Fetched Permissions:', permissionDataArray);
 
-            permissionDataArray.forEach(permissionData => {
-                const matchedPermission = permissions.find(p => p.id === permissionData.id);
-                if (matchedPermission) {
-                    if (permissionData.permissionName) { // Ensure permissionName is defined
-                        permissionArray.push({
-                            permission_name: permissionData.permissionName, // Use correct field
-                            permission_value: matchedPermission.value,
-                        });
-                    } else {
-                        console.warn(`Permission data with ID ${permissionData.id} has no name`);
-                    }
-                } else {
-                    console.warn(`No matching permission found for ID: ${permissionData.id}`);
-                }
-            });
+//             permissionDataArray.forEach(permissionData => {
+//                 const matchedPermission = permissions.find(p => p.id === permissionData.id);
+//                 if (matchedPermission) {
+//                     if (permissionData.permissionName) { // Ensure permissionName is defined
+//                         permissionArray.push({
+//                             permission_name: permissionData.permissionName, // Use correct field
+//                             permission_value: matchedPermission.value,
+//                         });
+//                     } else {
+//                         console.warn(`Permission data with ID ${permissionData.id} has no name`);
+//                     }
+//                 } else {
+//                     console.warn(`No matching permission found for ID: ${permissionData.id}`);
+//                 }
+//             });
 
-            if (permissionArray.length > 0) {
-                await prisma.userPermission.create({
-                    data: {
-                        userId: userId,
-                        permissions: {
-                            create: permissionArray.map(permission => ({
-                                permissionName: permission.permission_name,
-                                permissionValue: permission.permission_value,
-                            })),
-                        },
-                    },
-                });
-                logger.info('User permissions assigned');
-            } else {
-                logger.warn('No valid permissions to assign');
-            }
-        } catch (err) {
-            logger.error('Error handling permissions:', err);
-        }
-    }
-    return permissionArray;
-};
+//             if (permissionArray.length > 0) {
+//                 await prisma.userPermission.create({
+//                     data: {
+//                         userId: userId,
+//                         permissions: {
+//                             create: permissionArray.map(permission => ({
+//                                 permissionName: permission.permission_name,
+//                                 permissionValue: permission.permission_value,
+//                             })),
+//                         },
+//                     },
+//                 });
+//                 logger.info('User permissions assigned');
+//             } else {
+//                 logger.warn('No valid permissions to assign');
+//             }
+//         } catch (err) {
+//             logger.error('Error handling permissions:', err);
+//         }
+//     }
+//     return permissionArray;
+// };
 
 const validateRequest = (req) => {
     const errors = validationResult(req);
@@ -176,93 +176,12 @@ const cacheUserData = async (userData) => {
     await setCache(`user:${userData.email}`, JSON.stringify(userData));
 };
 
-const validateUserId = (userId) => {
-    if (!userId || typeof userId !== 'string') {
-        console.error('Validation failed for user ID:', userId);
-        return { error: 'Invalid user ID' };
-    }
-    return null;
-};
-
-// const getUser = async (req, res) => {
-//     try {
-//         // Extract the current user ID from the token
-//         const currentUserId = req.user._id;
-
-//         // Check if the currentUserId is valid
-//         if (!mongoose.Types.ObjectId.isValid(currentUserId)) {
-//             return res.status(400).json({
-//                 success: false,
-//                 msg: 'Invalid user ID',
-//                 data: null
-//             });
-//         }
-
-//         // Perform aggregation to fetch users excluding the current user
-//         const users = await User.aggregate([
-//             {
-//                 $match: { 
-//                     _id: { $ne: new mongoose.Types.ObjectId(currentUserId) }
-//                 }
-//             },
-//             {
-//                 $lookup: {
-//                     from: "userpermissions",
-//                     localField: "_id",
-//                     foreignField: "user_id",
-//                     as: "permissions"
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     name: 1,
-//                     email: 1,
-//                     role: 1,
-//                     permissions: {
-//                         $cond: {
-//                             if: { $isArray: "$permissions" },
-//                             then: { $arrayElemAt: ["$permissions", 0] },
-//                             else: null
-//                         }
-//                     }
-//                 }
-//             },
-//             {
-//                 $addFields: {
-//                     permissions: {
-//                         permissions: "$permissions.permissions"
-//                     }
-//                 }
-//             }
-//         ]);
-
-//         // Debugging: Log the number of users fetched and currentUserId
-//         console.log(`Fetched ${users.length} users excluding ID ${currentUserId}`);
-
-//         return res.status(200).json({
-//             success: true,
-//             msg: 'Users fetched successfully!',
-//             data: users
-//         });
-//     } catch (error) {
-//         console.error('Error fetching users:', error);
-//         return res.status(500).json({
-//             success: false,
-//             msg: 'Internal server error',
-//             data: null
-//         });
-//     }
-// };
-
-
 const getUser = async (req, res) => {
     try {
-        // Extract the current user ID from the token
-        const currentUserId = req.user._id;
+        const userId = req.params.id;
 
-        // Check if the currentUserId is valid
-        if (!mongoose.Types.ObjectId.isValid(currentUserId)) {
+        // Validate user ID
+        if (!userId || typeof userId !== 'string') {
             return res.status(400).json({
                 success: false,
                 msg: 'Invalid user ID',
@@ -272,9 +191,13 @@ const getUser = async (req, res) => {
 
         // Fetch user data along with permissions
         const user = await prisma.user.findUnique({
-            where: { id: currentUserId },
+            where: { id: userId },
             include: {
-                permissions: true // Include user permissions
+                userPermissions: {
+                    include: {
+                        permissions: true // Directly include permissions
+                    }
+                }
             }
         });
 
@@ -287,6 +210,14 @@ const getUser = async (req, res) => {
             });
         }
 
+        // Flatten permissions for response
+        const permissions = user.userPermissions.flatMap(up => 
+            up.permissions.map(pd => ({
+                permissionName: pd.permissionName,
+                permissionValue: pd.permissionValue
+            }))
+        );
+
         // Respond with user data and permissions
         return res.status(200).json({
             success: true,
@@ -296,7 +227,7 @@ const getUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                permissions: user.permissions 
+                permissions // Send the flattened permissions
             }
         });
     } catch (error) {
@@ -314,27 +245,47 @@ const getUsers = async (req, res) => {
     const currentUserId = req.user._id;
 
     try {
-        // Define the where clause for counting
-        const whereClause = {
-            ...getSoftDeleteQuery(false), // Adjust as needed
-        };
+        const startIndex = (page - 1) * limit;
 
-        // Count total users directly
+        // Count total users excluding the current user
         const totalUsers = await prisma.user.count({
-            where: whereClause,
+            where: {
+                id: {
+                    not: currentUserId, // Exclude current user
+                },
+            },
         });
 
-        // Fetch users with pagination
+        // Fetch users with pagination and permissions
         const users = await prisma.user.findMany({
-            where: whereClause,
-            orderBy: { createdAt: 'desc' },
+            where: {
+                id: {
+                    not: currentUserId,
+                },
+            },
+            skip: startIndex,
             take: limit,
-            skip: (page - 1) * limit,
+            include: {
+                userPermissions: {
+                    include: {
+                        permissions: true,
+                    },
+                },
+            },
         });
 
         if (!users || users.length === 0) {
             return res.status(200).json({ success: true, msg: 'No users found', data: [] });
         }
+
+        // Flatten permissions for response
+        const usersWithPermissions = users.map(user => ({
+            ...user,
+            permissions: user.userPermissions.flatMap(up => up.permissions.map(p => ({
+                permissionName: p.name,
+                permissionValue: p.value,
+            }))),
+        }));
 
         // Calculate total pages
         const totalPages = Math.ceil(totalUsers / limit);
@@ -343,7 +294,7 @@ const getUsers = async (req, res) => {
             success: true,
             msg: 'Users fetched successfully!',
             data: {
-                users,
+                users: usersWithPermissions,
                 pagination: {
                     currentPage: page,
                     totalUsers,
@@ -365,22 +316,116 @@ const updateUser = async (req, res) => {
             return res.status(400).json(errors);
         }
 
-        const { id, name, role } = req.body;
+        const { id } = req.params; // Extract id from params
+        const { name, role, permissions } = req.body;
+
         const userExistsResponse = await checkUserExists(id);
         if (userExistsResponse) {
             return res.status(400).json(userExistsResponse);
         }
 
+        // Update user data
         const updatedData = await updateUserData(id, { name, role });
+
+        // Handle permissions
+        if (permissions && Array.isArray(permissions)) {
+            await handlePermissions(permissions, id);
+        }
+
+        // Fetch the user again to include permissions in the response
+        const userWithPermissions = await prisma.user.findUnique({
+            where: { id },
+            include: {
+                userPermissions: {
+                    include: {
+                        permissions: true,
+                    },
+                },
+            },
+        });
+
+        // Flatten permissions for response
+        const permissionsResponse = userWithPermissions.userPermissions.flatMap(up => 
+            up.permissions.map(pd => ({
+                permissionName: pd.permissionName,
+                permissionValue: pd.permissionValue,
+            }))
+        );
+
         return res.status(200).json({
             success: true,
             msg: 'User updated successfully',
-            data: updatedData
+            data: {
+                ...userWithPermissions,
+                permissions: permissionsResponse, // Add permissions to response
+            }
         });
     } catch (error) {
-        return res.status(400).json({
+        console.error('Error updating user:', error);
+        return res.status(500).json({
             success: false,
-            msg: error.message
+            msg: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
+const handlePermissions = async (permissions, userId) => {
+    const currentUserPermissions = await prisma.userPermission.findMany({
+        where: { userId },
+        include: { permissions: true },
+    });
+
+    const permissionsToCreate = [];
+    const permissionsToUpdate = [];
+
+    for (const permission of permissions) {
+        const { id: permissionId, value: permissionValue } = permission;
+
+        const existingPermission = currentUserPermissions.find(up =>
+            up.permissions.some(pd => pd.id === permissionId)
+        );
+
+        if (!existingPermission) {
+            // Create new permission entry if it doesn't exist
+            permissionsToCreate.push({
+                userId,
+                permissions: {
+                    create: [
+                        {
+                            permissionName: permissionId, // or whatever naming convention you use
+                            permissionValue: [permissionValue], // ensure it's an array if needed
+                        },
+                    ],
+                },
+            });
+        } else {
+            // Update existing permission entry
+            permissionsToUpdate.push({
+                userPermissionId: existingPermission.id,
+                permissionId,
+                permissionValue,
+            });
+        }
+    }
+
+    // Create new UserPermission entries
+    for (const permission of permissionsToCreate) {
+        await prisma.userPermission.create({
+            data: permission,
+        });
+    }
+
+    // Update existing permissions
+    for (const permission of permissionsToUpdate) {
+        await prisma.permissionDetail.updateMany({
+            where: {
+                userPermissionId: permission.userPermissionId,
+                permissionName: permission.permissionId,
+            },
+            data: {
+                permissionValue: [permission.permissionValue], // Update as necessary
+            },
         });
     }
 };
@@ -415,15 +460,18 @@ const deleteUser = async (req, res) => {
 };
 
 const checkUserExists = async (id) => {
-    const isExists = await User.findOne({ _id: id });
-    if (!isExists) {
+    const userExists = await prisma.user.findUnique({
+        where: { id }
+    });
+    if (!userExists) {
         return {
             success: false,
             msg: 'User not found!'
         };
     }
-    return null;
+    return null; // Return null if user exists
 };
+
 
 // const fetchUsers = async (currentUserId, page, limit) => {
 //     const startIndex = (page - 1) * limit;

@@ -1,5 +1,10 @@
 const prisma = require('../prisma/prismaClient'); 
 
+
+const getSoftDeleteQuery = (trashed) => {
+    return trashed ? {} : { deletedAt: null }; // Adjust according to your schema
+};
+
 const withTransaction = async (callback) => {
     return await prisma.$transaction(callback);
 };
@@ -27,11 +32,6 @@ exports.findMany = async (model, { params = {}, trashed = false, include = null,
         console.error('Error fetching records:', error);
         throw new Error('Error fetching records');
     }
-};
-
-
-const getSoftDeleteQuery = (trashed) => {
-    return trashed ? {} : { deletedAt: null }; // Adjust according to your schema
 };
 
 const getAttributesQuery = (columns) => {
@@ -139,6 +139,7 @@ exports.softDelete = async (model, where) => {
 };
 
 
-// module.exports = {prisma};
-
-
+module.exports = {
+    getSoftDeleteQuery,
+    getTotalCount,
+};
